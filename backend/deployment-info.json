@@ -1,0 +1,18 @@
+{
+  "network": "base-sepolia",
+  "courtContract": "0x0B4d7c01105DD615EFD404b0C8d0d7b84dE596a0",
+  "treasuryAddresses": {
+    "courtTreasury": "0x1df1a76d28fA28715D39EB2bE58c40af07075F63",
+    "juryPool": "0xe4b665E8cCb6bd327B70BDdD58014a54A29807fa",
+    "precedentFund": "0x1A8f01AFbbdafA6C801a66c60a0c2179269eDC81"
+  },
+  "aiJudgeAddress": "0x6c0313Be8E8DFDF3a9fc720ccAd9BEE5Ea3DaCBc",
+  "walletSeeds": {
+    "courtTreasury": "5c4fb5f8-f578-42c4-9173-9ede02bad5ad",
+    "juryPool": "3eb9f183-f0a4-4c7e-a192-a60bd1894b2e",
+    "precedentFund": "f11bbce1-ca2b-4fe5-a612-376fc8b9e9e0",
+    "aiJudge": "f0f9ce7a-7d63-4d74-be97-f1c78a8a7172"
+  },
+  "deployedAt": "2025-06-08T05:20:41.354Z",
+  "deployer": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438"
+}
