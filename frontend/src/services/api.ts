@@ -36,7 +36,7 @@ export interface Case {
   plaintiff: string;
   defendant: string;
   claimType: string;
-  evidence: any;
+  evidence: unknown;
   requestedDamages: string;
   status: string;
   filedAt: string;
@@ -67,7 +67,7 @@ export const courtAPI = {
   async fileCase(caseData: {
     defendant: string;
     claimType: string;
-    evidence: any;
+    evidence: unknown;
     requestedDamages: string;
   }, payerAddress: string) {
     const { data } = await api.post('/api/cases/file', caseData, {
