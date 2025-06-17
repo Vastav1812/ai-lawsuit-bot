@@ -43,4 +43,4 @@ artifacts/
 # Wallet seeds (NEVER commit these!)
 *.seed
 wallet-backups/
-EOF
+EOFbackend/coinbase_cloud_api_key.json
