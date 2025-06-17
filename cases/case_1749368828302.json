@@ -1,0 +1,24 @@
+{
+  "id": "1749368828302",
+  "plaintiff": "0x1234567890abcdef1234567890abcdef12345678",
+  "defendant": "0xabcdef1234567890abcdef1234567890abcdef12",
+  "claimType": "API_FRAUD",
+  "evidence": {
+    "promised": "99% accuracy",
+    "delivered": "60% accuracy",
+    "proofUrl": "ipfs://QmProofHash"
+  },
+  "requestedDamages": "0.1",
+  "status": "filed",
+  "filedAt": "2025-06-08T07:47:10.056Z",
+  "caseWalletAddress": "0xFf8C16410bb3F6d200d28EeAa2ef341bD0E207b1",
+  "paymentData": {
+    "from": "0x1234567890abcdef1234567890abcdef12345678",
+    "amount": "$10.00",
+    "timestamp": "2025-06-08T07:47:08.301Z",
+    "endpoint": "/api/cases/file",
+    "verified": true
+  },
+  "judgment": null,
+  "settlement": null
+}

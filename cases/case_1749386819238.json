@@ -1,0 +1,25 @@
+{
+  "id": "1749386819238",
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "8Y1rx4wwJSc2rGH5yMdqGD8Ak3Z13w7b9zHZ1B9FEjiH",
+  "claimType": "API_FRAUD",
+  "evidence": "abcd",
+  "requestedDamages": "0.1",
+  "status": "judged",
+  "filedAt": "2025-06-08T12:47:00.885Z",
+  "caseWalletAddress": "0x2Afb07cBba3176A5f82A69E123ef7bcC69FdCBD5",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-08T12:46:59.234Z",
+    "endpoint": "/api/cases/file",
+    "verified": true
+  },
+  "judgment": {
+    "verdict": "guilty",
+    "awardedDamages": 0.05,
+    "reasoning": "Based on the evidence provided, partial damages are awarded."
+  },
+  "settlement": null,
+  "judgedAt": "2025-06-15T15:41:29.239Z"
+}
