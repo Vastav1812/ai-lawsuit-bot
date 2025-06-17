@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5"
   },
   "scripts": {
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "test": "echo \"No backend tests yet\" && exit 0"
   }
 }
