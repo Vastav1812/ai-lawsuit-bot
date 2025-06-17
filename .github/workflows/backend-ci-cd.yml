@@ -1,0 +1,38 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'contracts/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install backend dependencies
+      run: npm install
+      working-directory: backend
+
+    - name: Run backend tests
+      run: npm test -- --passWithNoTests # Adjust if you have actual tests
+      working-directory: backend
+
+    - name: Compile Smart Contracts
+      run: npx hardhat compile
+      working-directory: backend # Assuming hardhat.config.cjs is in backend
+
+    - name: Run Smart Contract tests
+      run: npx hardhat test
+      working-directory: backend # Assuming test files are in backend/test 

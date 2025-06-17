@@ -1,0 +1,37 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+      working-directory: frontend
+
+    - name: Run tests
+      run: npm test -- --passWithNoTests # Adjust if you have actual tests
+      working-directory: frontend
+
+    - name: Build frontend
+      run: npm run build
+      working-directory: frontend
+      env:
+        # These should ideally be set as GitHub Secrets in a real scenario
+        NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
+        # Add any other NEXT_PUBLIC_ variables required for build here 
