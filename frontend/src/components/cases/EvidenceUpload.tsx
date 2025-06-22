@@ -33,31 +33,19 @@ export function EvidenceUpload({
   }, []);
 
   const validateFile = (file: File): string | null => {
-    // Check file size
     if (file.size > maxSize * 1024 * 1024) {
-      return `File ${file.name} exceeds ${maxSize}MB limit`;
+      return `File ${file.name} is too large. Maximum size is ${maxSize}MB.`;
     }
 
-    // Check file type
-    const fileExtension = `.${file.name.split('.').pop()?.toLowerCase()}`;
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!acceptedTypes.includes(fileExtension)) {
-      return `File type ${fileExtension} not supported`;
+      return `File type ${fileExtension} is not supported.`;
     }
 
     return null;
   };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    setError(null);
-
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    handleFiles(droppedFiles);
-  }, [files]);
-
-  const handleFiles = (newFiles: File[]) => {
+  const handleFiles = useCallback((newFiles: File[]) => {
     const totalFiles = files.length + newFiles.length;
     if (totalFiles > maxFiles) {
       setError(`Maximum ${maxFiles} files allowed`);
@@ -76,7 +64,17 @@ export function EvidenceUpload({
     const updatedFiles = [...files, ...newFiles];
     setFiles(updatedFiles);
     onFilesChange(updatedFiles);
-  };
+  }, [files, maxFiles, maxSize, acceptedTypes, onFilesChange]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    setError(null);
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    handleFiles(droppedFiles);
+  }, [handleFiles]);
 
   const removeFile = (index: number) => {
     const updatedFiles = files.filter((_, i) => i !== index);

@@ -48,7 +48,7 @@ export function JudgmentDisplay({
           </Badge>
         </div>
         <CardDescription>
-          Rendered {formatDistanceToNow(new Date(judgment.judgmentDate), { addSuffix: true })}
+          Rendered {formatDistanceToNow(new Date(judgment.judgmentDate || Date.now()), { addSuffix: true })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

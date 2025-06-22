@@ -28,7 +28,7 @@ export function useAPI<T = unknown>(options: UseAPIOptions<T>) {
     setError(null);
 
     try {
-      let responseData: T | null; // Changed from unknown
+      let responseData: T | null;
       
       if (options.requiresPayment && options.paymentAmount) {
         responseData = await executePayment<T>(
@@ -58,7 +58,6 @@ export function useAPI<T = unknown>(options: UseAPIOptions<T>) {
         options.onSuccess?.(responseData);
       } else {
         setData(null);
-        // Do not call onSuccess with null data, as onSuccess implies successful data retrieval.
       }
 
     } catch (err: unknown) {
@@ -74,16 +73,7 @@ export function useAPI<T = unknown>(options: UseAPIOptions<T>) {
     } finally {
       setLoading(false);
     }
-  }, [
-    options.endpoint,
-    options.method,
-    options.data,
-    options.requiresPayment,
-    options.paymentAmount,
-    executePayment,
-    options.onSuccess,
-    options.onError,
-  ]);
+  }, [options, executePayment]);
 
   useEffect(() => {
     if (options.autoFetch && options.endpoint) {

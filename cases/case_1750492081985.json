@@ -1,0 +1,68 @@
+{
+  "id": "1750492081985",
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "0x116B2467f8f5125C13D79067854a939C81662eC3",
+  "claimType": "TOKEN_FRAUD",
+  "evidence": "Alex Raymond, a blockchain developer, is accused of manipulating a token distribution service used by a startup for its Initial Coin Offering (ICO). The allegation is that he altered the backend service responsible for distributing token allocations to investors, diverting excess tokens to wallets under his control.",
+  "requestedDamages": "10",
+  "status": "under_appeal",
+  "filedAt": "2025-06-21T07:48:03.871Z",
+  "caseWalletAddress": "0x34F20E51f4630E91897BA5B8125A59841bF54B23",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-21T07:48:01.984Z",
+    "endpoint": "/api/cases-wallet/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  },
+  "judgment": {
+    "verdict": "guilty",
+    "awardedDamages": 5.1,
+    "reasoning": "Evidence suggests wrongdoing related to token fraud. While some elements of the claim are supported, the evidence lacks comprehensive detail. Awarding 51% of requested damages.",
+    "evidenceQuality": "adequate",
+    "evidenceScore": 90,
+    "specificFindings": [
+      "Evidence partially supports claims",
+      "3 relevant factors identified",
+      "Some documentation provided",
+      "Additional evidence would strengthen the case"
+    ],
+    "penalty": 0
+  },
+  "settlement": null,
+  "judgedAt": "2025-06-21T07:48:24.243Z",
+  "appealed": true,
+  "appeal": {
+    "id": "1750498738871",
+    "caseId": "1750492081985",
+    "appellant": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "reason": "esrctvybunmvceswedrftgyhujiksedrtgyhujiksedrftgyhujikrtgyh",
+    "filedAt": "2025-06-21T09:38:58.871Z",
+    "reviewDate": "2025-06-23T09:38:58.871Z",
+    "status": "pending",
+    "paymentData": {
+      "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+      "amount": "$25.00",
+      "timestamp": "2025-06-21T09:38:58.868Z",
+      "endpoint": "/api/cases-wallet/1750492081985/appeal",
+      "verified": true,
+      "requiredAmount": "$25.00"
+    }
+  },
+  "previousStatus": "judged",
+  "previousJudgment": {
+    "verdict": "guilty",
+    "awardedDamages": 5.1,
+    "reasoning": "Evidence suggests wrongdoing related to token fraud. While some elements of the claim are supported, the evidence lacks comprehensive detail. Awarding 51% of requested damages.",
+    "evidenceQuality": "adequate",
+    "evidenceScore": 90,
+    "specificFindings": [
+      "Evidence partially supports claims",
+      "3 relevant factors identified",
+      "Some documentation provided",
+      "Additional evidence would strengthen the case"
+    ],
+    "penalty": 0
+  }
+}

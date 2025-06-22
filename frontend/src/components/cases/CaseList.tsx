@@ -33,7 +33,7 @@ export function CaseList({
   const currentCases = cases.slice(startIndex, endIndex);
 
   const handleViewDetails = (caseId: string) => {
-    router.push(`/cases/${caseId}`);
+    router.push(`/my-cases/${caseId}`); // FIXED: Changed from /cases/ to /my-cases/
   };
 
   if (loading) {

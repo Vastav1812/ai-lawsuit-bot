@@ -16,7 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface SettlementStatusProps {
-  settlement: Settlement;
+  settlement: Settlement & { paymentDeadline?: string };
   className?: string;
 }
 
@@ -25,12 +25,15 @@ export function SettlementStatus({ settlement, className }: SettlementStatusProp
   const required = parseFloat(settlement.requiredAmount);
   const progress = (deposited / required) * 100;
   const isFunded = settlement.status === 'funded' || settlement.status === 'distributed';
-  const deadline = new Date(settlement.deadline);
+  
+  // Handle both deadline and paymentDeadline fields from backend
+  const deadlineString = settlement.paymentDeadline || settlement.deadline;
+  const deadline = deadlineString ? new Date(deadlineString) : new Date();
   const isOverdue = deadline < new Date() && !isFunded;
 
   const getStatusColor = () => {
     switch (settlement.status) {
-      case 'pending':
+      case 'pending_payment':
         return 'warning';
       case 'funded':
         return 'info';
@@ -45,7 +48,7 @@ export function SettlementStatus({ settlement, className }: SettlementStatusProp
   
   const getStatusIcon = () => {
     switch (settlement.status) {
-      case 'pending':
+      case 'pending_payment':
         return <Clock className="h-4 w-4" />;
       case 'funded':
         return <Wallet className="h-4 w-4" />;
@@ -102,7 +105,7 @@ export function SettlementStatus({ settlement, className }: SettlementStatusProp
         </div>
     
         {/* Deadline */}
-        {settlement.status === 'pending' && (
+        {settlement.status === 'pending_payment' && (
           <div className={cn(
             "rounded-lg p-3",
             isOverdue ? "bg-red-500/10 border border-red-500/20" : "bg-gray-800"

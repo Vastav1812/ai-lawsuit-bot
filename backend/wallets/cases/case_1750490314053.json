@@ -1,0 +1,20 @@
+{
+  "walletId": "c831ad57-1fd0-41a9-83eb-1a8ce6931138",
+  "caseId": "1750490314053",
+  "address": {
+    "networkId": "base-sepolia",
+    "id": "0x71dE35591b3C410bceE47dcC767d8A4be2EA76FC",
+    "model": {
+      "address_id": "0x71dE35591b3C410bceE47dcC767d8A4be2EA76FC",
+      "index": 0,
+      "network_id": "base-sepolia",
+      "public_key": "03143f9b5af46194530e0fdc9edc1eb5b1dee59a722f9239b8f3f007f6c6a98cf1",
+      "wallet_id": "c831ad57-1fd0-41a9-83eb-1a8ce6931138"
+    },
+    "key": {
+      "provider": null,
+      "address": "0x71dE35591b3C410bceE47dcC767d8A4be2EA76FC"
+    }
+  },
+  "createdAt": "2025-06-21T07:18:35.582Z"
+}

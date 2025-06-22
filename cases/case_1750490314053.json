@@ -1,0 +1,33 @@
+{
+  "id": "1750490314053",
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "0x116B2467f8f5125C13D79067854a939C81662eC3",
+  "claimType": "SERVICE_MANIPULATION",
+  "evidence": "Mr. Rohan Mehta was accused of digitally altering CCTV footage using an AI-based video editing tool to frame Ms. Ananya Roy in a corporate theft case. The manipulated footage was initially accepted as valid evidence in court.",
+  "requestedDamages": "5",
+  "status": "judged",
+  "filedAt": "2025-06-21T07:18:35.586Z",
+  "caseWalletAddress": "0x71dE35591b3C410bceE47dcC767d8A4be2EA76FC",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-21T07:18:34.052Z",
+    "endpoint": "/api/cases-wallet/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  },
+  "judgment": {
+    "verdict": "guilty",
+    "awardedDamages": 3.5,
+    "reasoning": "Based on the evidence provided, the claim appears valid. Awarding 70% of requested damages.",
+    "evidenceQuality": "strong",
+    "evidenceScore": 90,
+    "specificFindings": [
+      "Evidence shows clear harm",
+      "Damages are partially justified"
+    ],
+    "penalty": 0
+  },
+  "settlement": null,
+  "judgedAt": "2025-06-21T07:18:42.847Z"
+}

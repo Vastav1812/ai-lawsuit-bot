@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 export class WalletManager {
   constructor() {
     this.wallets = new Map();
-    this.walletsDir = path.join(__dirname, '../../wallets');
+    this.walletsDir = path.join(process.cwd(), 'wallets');
     this.initialized = false;
   }
 

@@ -21,9 +21,52 @@ config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configure CORS with specific options
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // List of allowed origins - add all possible frontend URLs
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3002',
+      'http://localhost:4000',
+      'http://127.0.0.1:4000',
+      'http://localhost:5173',  // Vite default
+      'http://127.0.0.1:5173'
+    ];
+    
+    // Check if the origin is allowed
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // In development, you might want to allow all origins
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`⚠️  CORS: Allowing origin ${origin} in development mode`);
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-PAYMENT', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['X-Payment-Required', 'X-Payment-Amount'],
+  maxAge: 86400 // 24 hours
+};
+
 // Middleware
-app.use(helmet());
-app.use(cors());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable preflight for all routes
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -154,6 +197,7 @@ const server = app.listen(PORT, () => {
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Network: ${process.env.NETWORK || 'base-sepolia'}`);
   console.log(`💰 x402 Payment Gateway: Active`);
+  console.log(`🌐 CORS: Configured for development`);
   console.log(`\n📊 Pricing:`);
   
   if (PRICING && typeof PRICING === 'object') {
@@ -188,15 +232,22 @@ const server = app.listen(PORT, () => {
               .replace(/$$\?\:/g, '')
               .replace(/$$/g, '')
               .split('?')[0];
+            
+            // Clean up any remaining regexp artifacts
+            basePath = basePath.replace(/[()]/g, '').replace(/\\/g, '');
+            
+            // Ensure no double slashes
+            basePath = basePath.replace(/\/+/g, '/');
           } catch (e) {
-            basePath = '/?';
+            basePath = '/';
           }
           
           if (middleware.handle && middleware.handle.stack) {
             middleware.handle.stack.forEach((handler) => {
               if (handler.route) {
                 const methods = Object.keys(handler.route.methods).join(', ').toUpperCase();
-                console.log(`   ${methods} ${basePath}${handler.route.path}`);
+                const fullPath = `${basePath}${handler.route.path}`.replace(/\/+/g, '/');
+                console.log(`   ${methods} ${fullPath}`);
               }
             });
           }

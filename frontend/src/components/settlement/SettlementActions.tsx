@@ -32,7 +32,7 @@ export function SettlementActions({
   const [loading, setLoading] = useState(false);
 
   const remainingAmount = parseFloat(settlement.requiredAmount) - parseFloat(settlement.depositedAmount || '0');
-  const canDeposit = isDefendant && settlement.status === 'pending' && remainingAmount > 0;
+  const canDeposit = isDefendant && settlement.status === 'pending_payment' && remainingAmount > 0;
   const canWithdraw = !isDefendant && settlement.status === 'expired' && parseFloat(settlement.depositedAmount || '0') > 0;
 
   const handleDeposit = async () => {

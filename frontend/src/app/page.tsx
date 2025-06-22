@@ -1,7 +1,7 @@
 // src/app/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { FileText, Gavel, Sparkles, Shield, Zap, TrendingUp } from 'lucide-react';
@@ -42,11 +42,7 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [address]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch dashboard stats
@@ -68,7 +64,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [address]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleFileCase = () => {
     if (!address) {
@@ -76,10 +76,6 @@ export default function DashboardPage() {
       return;
     }
     setShowFilingModal(true);
-  };
-
-  const handleLearnMore = () => {
-    router.push('/docs');
   };
 
   return (
@@ -94,10 +90,7 @@ export default function DashboardPage() {
 
         {/* Hero Section */}
         <PageContainer className="py-0 relative z-10">
-          <HeroSection 
-            onFileCase={handleFileCase}
-            onLearnMore={handleLearnMore}
-          />
+          <HeroSection />
         </PageContainer>
 
         {/* Stats Grid */}

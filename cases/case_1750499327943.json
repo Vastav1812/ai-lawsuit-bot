@@ -1,0 +1,35 @@
+{
+  "id": "1750499327943",
+  "plaintiff": "0x116B2467f8f5125C13D79067854a939C81662eC3",
+  "defendant": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "claimType": "API_FRAUD",
+  "evidence": "Ryan Kapoor, a backend engineer at DataStreamX, is accused of manipulating an internal API service to exfiltrate confidential customer data including analytics logs, IP addresses, and customer usage patterns. The data was later found on the dark web.",
+  "requestedDamages": "0.1",
+  "status": "judged",
+  "filedAt": "2025-06-21T09:48:57.819Z",
+  "caseWalletAddress": "0x6cfb834e1C50366eceac3b6268c5D519acb4f48A",
+  "paymentData": {
+    "from": "0x116B2467f8f5125C13D79067854a939C81662eC3",
+    "amount": "$10.00",
+    "timestamp": "2025-06-21T09:48:47.941Z",
+    "endpoint": "/api/cases-wallet/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  },
+  "judgment": {
+    "verdict": "not_guilty",
+    "awardedDamages": 0,
+    "reasoning": "Insufficient evidence to support the claims. The plaintiff has not met the burden of proof. The evidence lacks specific details, corroborating factors, or clear connection to the alleged wrongdoing.",
+    "evidenceQuality": "weak",
+    "evidenceScore": 90,
+    "specificFindings": [
+      "Lack of specific evidence related to API_FRAUD",
+      "No clear proof of wrongdoing",
+      "Claims are largely unsubstantiated",
+      "Evidence lacks relevant details"
+    ],
+    "penalty": 0
+  },
+  "settlement": null,
+  "judgedAt": "2025-06-21T09:49:06.727Z"
+}

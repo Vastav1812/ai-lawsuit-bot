@@ -14,22 +14,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Plus } from 'lucide-react';
 import { Case, CaseStatus, ClaimType } from '@/lib/types';
 import { API_URL } from '@/lib/constants';
+import { useRequestJudgment } from '@/hooks/useCases';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-interface StatusCounts {
+type StatusCounts = {
   all: number;
-  [CaseStatus.FILED]: number;
-  [CaseStatus.UNDER_REVIEW]: number;
-  [CaseStatus.JUDGED]: number;
-  [CaseStatus.SETTLED]: number;
-  [CaseStatus.APPEALED]: number;
-  [CaseStatus.DISMISSED]: number;
-}
+} & Record<CaseStatus, number>;
 
 export default function MyCasesPage() {
   const router = useRouter();
   const { address } = useAccount();
+  const { requestJudgment, loading: judgmentLoading } = useRequestJudgment();
   const [cases, setCases] = useState<Case[]>([]);
   const [filteredCases, setFilteredCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,44 +92,38 @@ export default function MyCasesPage() {
 
   const handleRequestJudgment = async (caseId: string) => {
     try {
-      const paymentData = btoa(JSON.stringify({
-        from: address,
-        amount: '$5.00'
-      }));
-
-      const response = await axios.post(
-        `${API_URL}/api/cases-wallet/${caseId}/judge`,
-        {},
-        {
-          headers: {
-            'X-PAYMENT': paymentData
-          }
-        }
-      );
-
-      if (response.data.success) {
-        toast.success('Judgment requested successfully');
-        fetchCases();
+      console.log('Requesting judgment for case:', caseId);
+      const result = await requestJudgment(caseId);
+      
+      if (result && typeof result === 'object' && 'success' in result && result.success) {
+        toast.success('Judgment requested successfully!');
+        // Refresh cases to show updated status
+        await fetchCases();
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to request judgment';
+    } catch (error: unknown) {
+      console.error('Error requesting judgment:', error);
+      const errorMessage = error && typeof error === 'object' && 'response' in error
+        ? (error.response as { data?: { error?: string } })?.data?.error || 'Failed to request judgment'
+        : error && typeof error === 'object' && 'message' in error
+        ? (error as { message: string }).message
+        : 'Failed to request judgment';
       toast.error(errorMessage);
     }
   };
 
   const getStatusCounts = (): StatusCounts => {
-    const counts: StatusCounts = {
+    const counts = {
       all: cases.length,
-      [CaseStatus.FILED]: 0,
-      [CaseStatus.UNDER_REVIEW]: 0,
-      [CaseStatus.JUDGED]: 0,
-      [CaseStatus.SETTLED]: 0,
-      [CaseStatus.APPEALED]: 0,
-      [CaseStatus.DISMISSED]: 0,
-    };
+      ...Object.values(CaseStatus).reduce((acc, status) => ({
+        ...acc,
+        [status]: 0
+      }), {} as Record<CaseStatus, number>)
+    } as StatusCounts;
 
     cases.forEach(case_ => {
-      counts[case_.status]++;
+      if (case_.status in counts) {
+        counts[case_.status as CaseStatus]++;
+      }
     });
 
     return counts;
@@ -199,8 +189,8 @@ export default function MyCasesPage() {
                 <SelectItem value={CaseStatus.SETTLED}>
                   Settled ({statusCounts[CaseStatus.SETTLED]})
                 </SelectItem>
-                <SelectItem value={CaseStatus.APPEALED}>
-                  Appealed ({statusCounts[CaseStatus.APPEALED]})
+                <SelectItem value={CaseStatus.UNDER_APPEAL}>
+                  Under Appeal ({statusCounts[CaseStatus.UNDER_APPEAL]})
                 </SelectItem>
                 <SelectItem value={CaseStatus.DISMISSED}>
                   Dismissed ({statusCounts[CaseStatus.DISMISSED]})
@@ -228,7 +218,7 @@ export default function MyCasesPage() {
           {/* Case List */}
           <CaseList
             cases={filteredCases}
-            loading={loading}
+            loading={loading || judgmentLoading}
             emptyMessage={
               activeTab === 'plaintiff' 
                 ? "You haven't filed any cases yet" 

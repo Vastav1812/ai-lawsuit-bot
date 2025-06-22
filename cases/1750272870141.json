@@ -1,0 +1,19 @@
+{
+  "id": 1750272870141,
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "0x4264604D4256E79585655293E53F5005FB31dD27",
+  "claimType": "API_FRAUD",
+  "evidence": "there is information about REST APIs and their usage in various applications.\n Additionally, there is mention of the Raud company, which is involved in logistics and transportation.",
+  "evidenceHash": "Qm22746865726520697320696e666f726d6174696f6e20",
+  "requestedDamages": "0.1",
+  "status": "pending_judgment",
+  "filedAt": "2025-06-18T18:54:30.141Z",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-18T18:54:30.141Z",
+    "endpoint": "/api/cases/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  }
+}

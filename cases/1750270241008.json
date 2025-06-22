@@ -1,0 +1,19 @@
+{
+  "id": 1750270241008,
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "0x6797Ac0D376A5258985Dd8D769dBE410e24432fd",
+  "claimType": "API_FRAUD",
+  "evidence": "stealed api keys and used it in app and never replied",
+  "evidenceHash": "Qm22737465616c656420617069206b65797320616e6420",
+  "requestedDamages": "5",
+  "status": "pending_judgment",
+  "filedAt": "2025-06-18T18:10:41.008Z",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-18T18:10:41.007Z",
+    "endpoint": "/api/cases/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  }
+}

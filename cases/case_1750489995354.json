@@ -1,0 +1,33 @@
+{
+  "id": "1750489995354",
+  "plaintiff": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "defendant": "0xf4200b59C110336aB8A8DC069736799BcD60B7d1",
+  "claimType": "DATA_THEFT",
+  "evidence": "ajsjdndwinidgthrjeeihtreiehrewerhtrejhfgfddjhfdjsdhfdjdhfdjsdhjsdh",
+  "requestedDamages": "0.1",
+  "status": "judged",
+  "filedAt": "2025-06-21T07:13:16.618Z",
+  "caseWalletAddress": "0x6D7f26dFE226B82c4BC3649054f91b3e39E0344F",
+  "paymentData": {
+    "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "amount": "$10.00",
+    "timestamp": "2025-06-21T07:13:15.347Z",
+    "endpoint": "/api/cases-wallet/file",
+    "verified": true,
+    "requiredAmount": "$10.00"
+  },
+  "judgment": {
+    "verdict": "not_guilty",
+    "awardedDamages": 0,
+    "reasoning": "Insufficient evidence to support the claim. The plaintiff has not met the burden of proof.",
+    "evidenceQuality": "weak",
+    "evidenceScore": 20,
+    "specificFindings": [
+      "Lack of specific evidence",
+      "Claims are unsubstantiated"
+    ],
+    "penalty": 0
+  },
+  "settlement": null,
+  "judgedAt": "2025-06-21T07:13:31.525Z"
+}

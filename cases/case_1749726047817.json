@@ -5,7 +5,7 @@
   "claimType": "API_FRAUD",
   "evidence": "abvdc",
   "requestedDamages": "0.1",
-  "status": "judged",
+  "status": "under_appeal",
   "filedAt": "2025-06-12T11:00:48.801Z",
   "caseWalletAddress": "0x6ABD18D4c25932b1F60505542F220CEe0fD9b912",
   "paymentData": {
@@ -21,5 +21,22 @@
     "reasoning": "Based on the evidence provided, partial damages are awarded."
   },
   "settlement": null,
-  "judgedAt": "2025-06-15T15:12:33.244Z"
+  "judgedAt": "2025-06-15T15:12:33.244Z",
+  "appealed": true,
+  "appeal": {
+    "id": "1750441478223",
+    "caseId": "1749726047817",
+    "appellant": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+    "reason": "cvbnmvcxdfghjkjhgfdsrtyuioiuytrdsdfghoplkjhvcvbnmiuygbnjiuyg",
+    "filedAt": "2025-06-20T17:44:38.223Z",
+    "status": "pending",
+    "paymentData": {
+      "from": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+      "amount": "$25.00",
+      "timestamp": "2025-06-20T17:44:38.222Z",
+      "endpoint": "/api/cases-wallet/1749726047817/appeal",
+      "verified": true,
+      "requiredAmount": "$25.00"
+    }
+  }
 }

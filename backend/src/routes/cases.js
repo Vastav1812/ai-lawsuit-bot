@@ -3,6 +3,7 @@ import { verifyPayment, trackPayment } from '../middleware/x402pay.js';
 import { invokeNovaMicro as invokeModel } from '../config/bedrock.js';
 import { ethers } from 'ethers';
 import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -20,7 +21,7 @@ const provider = new ethers.JsonRpcProvider(process.env.BASE_SEPOLIA_RPC);
 const contract = new ethers.Contract(deploymentInfo.courtContract, contractABI, provider);
 
 // Initialize case storage
-const casesDir = path.join(__dirname, '../../data/cases');
+const casesDir = path.join(process.cwd(), 'cases');
 fs.mkdirSync(casesDir, { recursive: true });
 
 // Helper to get case file path
@@ -31,14 +32,14 @@ function getCaseFilePath(caseId) {
 // Helper to save case data
 async function saveCaseData(caseId, data) {
   const filePath = getCaseFilePath(caseId);
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+  await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2));
 }
 
 // Helper to load case data
 async function loadCaseData(caseId) {
   const filePath = getCaseFilePath(caseId);
   try {
-    const data = await fs.readFile(filePath, 'utf8');
+    const data = await fsPromises.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -51,7 +52,7 @@ async function loadCaseData(caseId) {
 /**
  * File a new case - Requires $10 payment
  */
-router.post('/file', verifyPayment, trackPayment, async (req, res) => {
+router.post('/file', verifyPayment(10.00), trackPayment, async (req, res) => {
   try {
     const { defendant, claimType, evidence, requestedDamages } = req.body;
     
@@ -103,7 +104,7 @@ router.post('/file', verifyPayment, trackPayment, async (req, res) => {
 /**
  * Get AI judgment for a case - Requires $5 payment
  */
-router.post('/:caseId/judge', verifyPayment, trackPayment, async (req, res) => {
+router.post('/:caseId/judge', verifyPayment(5.00), trackPayment, async (req, res) => {
   try {
     const { caseId } = req.params;
     

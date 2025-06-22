@@ -1,0 +1,30 @@
+{
+  "caseId": "1750499417056",
+  "verdict": {
+    "verdict": "guilty",
+    "awardedDamages": 2.7,
+    "reasoning": "Evidence suggests wrongdoing related to data theft. While some elements of the claim are supported, the evidence lacks comprehensive detail. Awarding 54% of requested damages.",
+    "evidenceQuality": "adequate",
+    "evidenceScore": 90,
+    "specificFindings": [
+      "Evidence partially supports claims",
+      "2 relevant factors identified",
+      "Some documentation provided",
+      "Additional evidence would strengthen the case"
+    ],
+    "penalty": 0
+  },
+  "escrowAddress": "0xAc7FACe200c1E049fE5DB825f09CA15F7CC9CD38",
+  "status": "pending_payment",
+  "createdAt": "2025-06-21T09:50:21.959Z",
+  "requiredAmount": 2.7,
+  "defendant": "0xbDF6990357c7198327fe0988BA00b14C7AaAD438",
+  "plaintiff": "0x116B2467f8f5125C13D79067854a939C81662eC3",
+  "paymentDeadline": "2025-06-28T09:50:21.959Z",
+  "paymentInstructions": {
+    "network": "base-sepolia",
+    "address": "0xAc7FACe200c1E049fE5DB825f09CA15F7CC9CD38",
+    "amount": "2.7 ETH",
+    "memo": "Settlement for Case #1750499417056"
+  }
+}

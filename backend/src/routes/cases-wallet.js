@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 // Cases directory
-const casesDir = path.join(__dirname, '../../../cases');
+const casesDir = path.join(process.cwd(), 'cases');
 
 // Create cases directory on startup
 (async () => {
@@ -54,6 +54,53 @@ async function updateCaseData(caseId, updates) {
   const updatedData = { ...caseData, ...updates };
   await saveCaseData(caseId, updatedData);
   return updatedData;
+}
+
+// Helper function to analyze evidence quality
+function analyzeEvidenceQuality(evidence) {
+  if (!evidence || typeof evidence !== 'string') {
+    return { quality: 'invalid', score: 0 };
+  }
+
+  const evidenceLength = evidence.length;
+  const wordCount = evidence.split(/\s+/).filter(word => word.length > 2).length;
+  const hasCoherentWords = /\b\w{4,}\b/.test(evidence);
+  const sentenceCount = evidence.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+  const hasNumbers = /\d/.test(evidence);
+  const hasSpecialChars = /[^a-zA-Z0-9\s]/.test(evidence);
+  
+  // Check for gibberish patterns
+  const isGibberish = /^[a-z]{3,15}$/.test(evidence.toLowerCase()) || 
+                      /^[A-Z]{3,15}$/.test(evidence) ||
+                      /^(.)\1+$/.test(evidence); // Repeated characters
+  
+  let score = 0;
+  
+  // Scoring system
+  if (evidenceLength >= 50) score += 20;
+  else if (evidenceLength >= 20) score += 10;
+  
+  if (wordCount >= 10) score += 20;
+  else if (wordCount >= 5) score += 10;
+  
+  if (hasCoherentWords) score += 20;
+  if (sentenceCount >= 2) score += 20;
+  if (hasNumbers) score += 10;
+  if (hasSpecialChars && !isGibberish) score += 10;
+  
+  // Penalties
+  if (isGibberish) score -= 50;
+  if (evidenceLength < 20) score -= 20;
+  if (wordCount < 5) score -= 20;
+  
+  // Determine quality
+  let quality;
+  if (score >= 70) quality = 'strong';
+  else if (score >= 40) quality = 'adequate';
+  else if (score >= 20) quality = 'weak';
+  else quality = 'frivolous';
+  
+  return { quality, score };
 }
 
 // Initialize wallet manager on startup
@@ -173,7 +220,11 @@ router.get('/stats/summary', async (req, res) => {
       byClaimType: {},
       totalDamagesAwarded: 0,
       guiltyVerdicts: 0,
-      notGuiltyVerdicts: 0
+      notGuiltyVerdicts: 0,
+      dismissedFrivolous: 0,
+      totalPenalties: 0,
+      appealsGranted: 0,
+      appealsDenied: 0
     };
     
     for (const file of caseFiles) {
@@ -195,8 +246,20 @@ router.get('/stats/summary', async (req, res) => {
             if (caseData.judgment.verdict === 'guilty') {
               stats.guiltyVerdicts++;
               stats.totalDamagesAwarded += parseFloat(caseData.judgment.awardedDamages || 0);
-            } else {
+            } else if (caseData.judgment.verdict === 'not_guilty') {
               stats.notGuiltyVerdicts++;
+            } else if (caseData.judgment.verdict === 'dismissed_frivolous') {
+              stats.dismissedFrivolous++;
+              stats.totalPenalties += parseFloat(caseData.judgment.penalty || 0);
+            }
+          }
+          
+          // Count appeal outcomes
+          if (caseData.appealDecision) {
+            if (caseData.appealDecision.decision === 'upheld') {
+              stats.appealsDenied++;
+            } else {
+              stats.appealsGranted++;
             }
           }
         }
@@ -213,6 +276,52 @@ router.get('/stats/summary', async (req, res) => {
   } catch (error) {
     console.error('Stats error:', error);
     res.status(500).json({ error: "Failed to generate statistics" });
+  }
+});
+
+/**
+ * Process pending appeals - Free endpoint for checking appeal status
+ */
+router.get('/appeals/pending', async (req, res) => {
+  try {
+    const files = await fs.readdir(casesDir);
+    const caseFiles = files.filter(f => f.startsWith('case_') && f.endsWith('.json'));
+    
+    const pendingAppeals = [];
+    
+    for (const file of caseFiles) {
+      try {
+        const caseId = file.replace('case_', '').replace('.json', '');
+        const caseData = await loadCaseData(caseId);
+        
+        if (caseData && caseData.status === 'under_appeal' && caseData.appeal) {
+          const reviewDate = new Date(caseData.appeal.reviewDate);
+          const now = new Date();
+          const hoursRemaining = Math.max(0, Math.ceil((reviewDate - now) / (1000 * 60 * 60)));
+          
+          pendingAppeals.push({
+            caseId: caseData.id,
+            appealId: caseData.appeal.id,
+            filedAt: caseData.appeal.filedAt,
+            reviewDate: caseData.appeal.reviewDate,
+            hoursRemaining,
+            readyForReview: now >= reviewDate
+          });
+        }
+      } catch (e) {
+        console.error(`Error processing ${file}:`, e);
+      }
+    }
+    
+    res.json({
+      success: true,
+      pendingAppeals,
+      total: pendingAppeals.length
+    });
+    
+  } catch (error) {
+    console.error('Pending appeals error:', error);
+    res.status(500).json({ error: "Failed to fetch pending appeals" });
   }
 });
 
@@ -275,11 +384,12 @@ router.get('/', async (req, res) => {
   }
 });
 
+// backend/src/routes/cases-wallet.js - Fix the file endpoint around line 400-410
+
 /**
  * File a new case with wallet creation
  */
-router.post('/file', verifyPayment, trackPayment, async (req, res) => {
-  // Keep your existing implementation
+router.post('/file', verifyPayment(10.00), trackPayment, async (req, res) => {
   try {
     const { defendant, claimType, evidence, requestedDamages } = req.body;
     
@@ -296,8 +406,24 @@ router.post('/file', verifyPayment, trackPayment, async (req, res) => {
     
     // Create case wallet for potential settlement
     console.log(`Creating wallet for case ${caseId}...`);
-    const caseWallet = await walletManager.createCaseWallet(caseId);
-    const caseWalletAddress = await caseWallet.getDefaultAddress();
+    
+    // FIX: This line was missing - we need to check if wallet exists first
+    let caseWalletAddress;
+    try {
+      // Check if wallet already exists
+      const existingWallet = walletManager.wallets.get(`case_${caseId}`);
+      if (existingWallet) {
+        caseWalletAddress = await existingWallet.getDefaultAddress();
+      } else {
+        // Create new wallet
+        const caseWallet = await walletManager.createCaseWallet(caseId);
+        caseWalletAddress = await caseWallet.getDefaultAddress();
+      }
+    } catch (walletError) {
+      console.error('Wallet creation error:', walletError);
+      // Continue without wallet for now
+      caseWalletAddress = { getId: () => 'pending-wallet-creation' };
+    }
     
     // Store case data
     const caseData = {
@@ -340,7 +466,6 @@ router.post('/file', verifyPayment, trackPayment, async (req, res) => {
  * Get case details - Free endpoint
  */
 router.get('/:caseId', async (req, res) => {
-  // Keep your existing implementation
   try {
     const { caseId } = req.params;
     const caseData = await loadCaseData(caseId);
@@ -361,9 +486,9 @@ router.get('/:caseId', async (req, res) => {
 });
 
 /**
- * AI Judge + Settlement Initiation
+ * AI Judge + Settlement Initiation - Enhanced with evidence quality check
  */
-router.post('/:caseId/judge', verifyPayment, trackPayment, async (req, res) => {
+router.post('/:caseId/judge', verifyPayment(5.00), trackPayment, async (req, res) => {
   try {
     const { caseId } = req.params;
     console.log(`🔨 Processing judgment for case: ${caseId}`);
@@ -373,13 +498,6 @@ router.post('/:caseId/judge', verifyPayment, trackPayment, async (req, res) => {
     
     if (!caseData) {
       console.log(`❌ Case not found: ${caseId}`);
-      // List available cases for debugging
-      try {
-        const files = await fs.readdir(casesDir);
-        console.log('Available case files:', files);
-      } catch (e) {
-        console.log('Could not list cases directory');
-      }
       return res.status(404).json({ error: `Case ${caseId} not found` });
     }
     
@@ -393,52 +511,115 @@ router.post('/:caseId/judge', verifyPayment, trackPayment, async (req, res) => {
       });
     }
     
-    // Get AI judgment
-    const prompt = `As an AI Judge, analyze this case:
-Case Type: ${caseData.claimType}
-Evidence: ${JSON.stringify(caseData.evidence)}
-Requested Damages: ${caseData.requestedDamages} ETH
-
-Provide verdict as JSON: {"verdict":"guilty/not_guilty","awardedDamages":number,"reasoning":"explanation"}`;
-
-    console.log('🤖 Invoking AI model...');
-    
-    let aiResponse;
-    try {
-      aiResponse = await invokeModel(prompt, 200);
-      console.log('🤖 AI response:', aiResponse);
-    } catch (aiError) {
-      console.error('❌ AI model error:', aiError);
-      // Use fallback judgment
-      aiResponse = JSON.stringify({
-        verdict: "guilty",
-        awardedDamages: parseFloat(caseData.requestedDamages) * 0.5,
-        reasoning: "Based on the evidence provided, partial damages are awarded."
-      });
-    }
+    // Analyze evidence quality
+    const evidenceAnalysis = analyzeEvidenceQuality(caseData.evidence);
+    console.log('📊 Evidence analysis:', evidenceAnalysis);
     
     let judgment;
-    try {
-      judgment = JSON.parse(aiResponse);
-      // Ensure awardedDamages is a number
-      if (judgment.awardedDamages) {
-        judgment.awardedDamages = parseFloat(judgment.awardedDamages);
-      }
-    } catch (parseError) {
-      console.log('⚠️ Could not parse AI response, using fallback');
+    
+    // If evidence is clearly frivolous, dismiss immediately
+    if (evidenceAnalysis.quality === 'frivolous') {
       judgment = {
-        verdict: "guilty",
-        awardedDamages: parseFloat(caseData.requestedDamages) * 0.5,
-        reasoning: "Based on the evidence provided, partial damages are awarded."
+        verdict: "dismissed_frivolous",
+        awardedDamages: 0,
+        reasoning: "Case dismissed as frivolous. The evidence provided is insufficient, incoherent, or appears to be random text. This wastes judicial resources.",
+        evidenceQuality: "frivolous",
+        penalty: 0.1, // 0.1 ETH penalty
+        evidenceScore: evidenceAnalysis.score
       };
+    } else {
+      // Enhanced AI judgment prompt
+      const prompt = `As an AI Judge, carefully analyze this legal case:
+
+CASE DETAILS:
+- Case Type: ${caseData.claimType}
+- Evidence Provided: "${caseData.evidence}"
+- Requested Damages: ${caseData.requestedDamages} ETH
+- Evidence Quality Score: ${evidenceAnalysis.score}/100
+
+EVALUATION CRITERIA:
+1. Is the evidence specific and relevant to the claim type?
+2. Are there verifiable facts, dates, or transaction details?
+3. Does the evidence demonstrate actual harm or breach?
+4. Is the requested damage amount justified by the evidence?
+5. Are there any signs this is a bad faith claim?
+
+CLAIM TYPE REQUIREMENTS:
+- API_FRAUD: Must show unauthorized API usage, stolen keys, or fraudulent charges
+- DATA_THEFT: Must demonstrate data was stolen with proof of ownership and theft
+- SERVICE_MANIPULATION: Must show service was manipulated causing damages
+- TOKEN_FRAUD: Must prove token theft or fraudulent token transactions
+
+Provide judgment as JSON:
+{
+  "verdict": "guilty" / "not_guilty" / "dismissed_frivolous",
+  "awardedDamages": number (0 to requested amount based on evidence strength),
+  "reasoning": "detailed legal reasoning citing specific evidence",
+  "evidenceQuality": "strong" / "adequate" / "weak",
+  "evidenceScore": ${evidenceAnalysis.score},
+  "specificFindings": ["finding1", "finding2"],
+  "penalty": 0 (or 0.1 if bad faith claim)
+}`;
+
+      console.log('🤖 Invoking AI model with enhanced judgment logic...');
+      
+      let aiResponse;
+      try {
+        aiResponse = await invokeModel(prompt, 400);
+        console.log('🤖 AI response:', aiResponse);
+        judgment = JSON.parse(aiResponse);
+      } catch (aiError) {
+        console.error('❌ AI model error:', aiError);
+        
+        // Intelligent fallback based on evidence quality
+        if (evidenceAnalysis.quality === 'strong') {
+          judgment = {
+            verdict: "guilty",
+            awardedDamages: parseFloat(caseData.requestedDamages) * 0.7,
+            reasoning: "Based on the evidence provided, the claim appears valid. Awarding 70% of requested damages.",
+            evidenceQuality: evidenceAnalysis.quality,
+            evidenceScore: evidenceAnalysis.score,
+            specificFindings: ["Evidence shows clear harm", "Damages are partially justified"],
+            penalty: 0
+          };
+        } else if (evidenceAnalysis.quality === 'adequate') {
+          judgment = {
+            verdict: "guilty",
+            awardedDamages: parseFloat(caseData.requestedDamages) * 0.4,
+            reasoning: "Evidence suggests some validity to the claim. Awarding reduced damages due to limited proof.",
+            evidenceQuality: evidenceAnalysis.quality,
+            evidenceScore: evidenceAnalysis.score,
+            specificFindings: ["Some evidence of wrongdoing", "Damages partially substantiated"],
+            penalty: 0
+          };
+        } else {
+          judgment = {
+            verdict: "not_guilty",
+            awardedDamages: 0,
+            reasoning: "Insufficient evidence to support the claim. The plaintiff has not met the burden of proof.",
+            evidenceQuality: evidenceAnalysis.quality,
+            evidenceScore: evidenceAnalysis.score,
+            specificFindings: ["Lack of specific evidence", "Claims are unsubstantiated"],
+            penalty: 0
+          };
+        }
+      }
     }
     
     // Ensure verdict is properly formatted
     judgment.verdict = judgment.verdict.toLowerCase().replace(' ', '_');
     
+    // Ensure numeric values
+    if (judgment.awardedDamages) {
+      judgment.awardedDamages = parseFloat(judgment.awardedDamages);
+    }
+    if (judgment.penalty) {
+      judgment.penalty = parseFloat(judgment.penalty);
+    }
+    
     // Update case status
     const updatedCaseData = await updateCaseData(caseId, {
-      status: 'judged',
+      status: judgment.verdict === 'dismissed_frivolous' ? 'dismissed' : 'judged',
       judgment: judgment,
       judgedAt: new Date().toISOString()
     });
@@ -449,15 +630,38 @@ Provide verdict as JSON: {"verdict":"guilty/not_guilty","awardedDamages":number,
     let settlementInfo = null;
     if (judgment.verdict === "guilty" && judgment.awardedDamages > 0) {
       try {
+        console.log(`🏛️ Attempting to create settlement for case ${caseId} with damages ${judgment.awardedDamages}`);
+        console.log(`📋 Case data for settlement:`, {
+          id: updatedCaseData.id,
+          caseWalletAddress: updatedCaseData.caseWalletAddress,
+          defendant: updatedCaseData.defendant,
+          plaintiff: updatedCaseData.plaintiff
+        });
+        
         settlementInfo = await settlementService.initiateCaseSettlement(
           updatedCaseData,
           judgment
         );
-        console.log('💰 Settlement initiated:', settlementInfo);
+        console.log('💰 Settlement initiated successfully:', settlementInfo);
       } catch (settlementError) {
-        console.log('⚠️ Settlement initiation failed:', settlementError.message);
-        // Continue without settlement info
+        console.error('❌ Settlement initiation failed:', settlementError);
+        console.error('❌ Settlement error details:', settlementError.message);
+        console.error('❌ Settlement error stack:', settlementError.stack);
       }
+    } else {
+      console.log(`ℹ️ No settlement needed for case ${caseId} - verdict: ${judgment.verdict}, damages: ${judgment.awardedDamages}`);
+    }
+    
+    // Handle penalty for frivolous cases
+    let penaltyInfo = null;
+    if (judgment.verdict === "dismissed_frivolous" && judgment.penalty > 0) {
+      penaltyInfo = {
+        amount: judgment.penalty,
+        reason: "Frivolous lawsuit penalty",
+        payableBy: caseData.plaintiff,
+        payableTo: "Court Treasury",
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      };
     }
     
     res.json({
@@ -465,9 +669,12 @@ Provide verdict as JSON: {"verdict":"guilty/not_guilty","awardedDamages":number,
       caseId,
       judgment,
       settlement: settlementInfo,
+      penalty: penaltyInfo,
       message: judgment.verdict === "guilty" 
-        ? "Defendant must deposit funds to settlement wallet" 
-        : "Case dismissed - no damages awarded",
+        ? `Defendant found guilty. Must pay ${judgment.awardedDamages} ETH to settlement wallet.`
+        : judgment.verdict === "dismissed_frivolous"
+        ? `Case dismissed as frivolous. Plaintiff must pay ${judgment.penalty} ETH penalty.`
+        : "Case dismissed - defendant not guilty",
       paymentReceived: req.paymentData.amount
     });
     
@@ -625,15 +832,18 @@ router.get('/:caseId/wallet', async (req, res) => {
 });
 
 /**
- * Appeal a case - Requires $25 payment
+ * Appeal a case - Enhanced with timeline and validation
  */
-router.post('/:caseId/appeal', verifyPayment, trackPayment, async (req, res) => {
+router.post('/:caseId/appeal', verifyPayment(25.00), trackPayment, async (req, res) => {
   try {
     const { caseId } = req.params;
     const { reason } = req.body;
     
-    if (!reason) {
-      return res.status(400).json({ error: "Appeal reason is required" });
+    // Validate appeal reason
+    if (!reason || reason.length < 50) {
+      return res.status(400).json({ 
+        error: "Appeal reason must be at least 50 characters and provide substantive grounds for appeal" 
+      });
     }
     
     // Load case data
@@ -643,9 +853,9 @@ router.post('/:caseId/appeal', verifyPayment, trackPayment, async (req, res) => 
     }
     
     // Check if case can be appealed
-    if (caseData.status !== 'judged') {
+    if (!['judged', 'dismissed'].includes(caseData.status)) {
       return res.status(400).json({ 
-        error: "Only judged cases can be appealed",
+        error: "Only judged or dismissed cases can be appealed",
         currentStatus: caseData.status 
       });
     }
@@ -654,6 +864,21 @@ router.post('/:caseId/appeal', verifyPayment, trackPayment, async (req, res) => 
       return res.status(400).json({ error: "Case has already been appealed" });
     }
     
+    // Check if within appeal window (30 days)
+    const judgmentDate = new Date(caseData.judgedAt);
+    const daysSinceJudgment = (Date.now() - judgmentDate.getTime()) / (1000 * 60 * 60 * 24);
+    
+    if (daysSinceJudgment > 30) {
+      return res.status(400).json({ 
+        error: "Appeal window has expired. Appeals must be filed within 30 days of judgment.",
+        daysSinceJudgment: Math.floor(daysSinceJudgment)
+      });
+    }
+    
+    // Calculate appeal review date (48 hours from now)
+    const appealReviewDate = new Date();
+    appealReviewDate.setHours(appealReviewDate.getHours() + 48);
+    
     // Create appeal record
     const appeal = {
       id: Date.now().toString(),
@@ -661,6 +886,7 @@ router.post('/:caseId/appeal', verifyPayment, trackPayment, async (req, res) => 
       appellant: req.paymentData.from,
       reason,
       filedAt: new Date().toISOString(),
+      reviewDate: appealReviewDate.toISOString(),
       status: 'pending',
       paymentData: req.paymentData
     };
@@ -669,20 +895,211 @@ router.post('/:caseId/appeal', verifyPayment, trackPayment, async (req, res) => 
     await updateCaseData(caseId, {
       appealed: true,
       appeal: appeal,
-      status: 'under_appeal'
+      status: 'under_appeal',
+      previousStatus: caseData.status,
+      previousJudgment: caseData.judgment
     });
     
     res.json({
       success: true,
       message: "Appeal filed successfully",
       appealId: appeal.id,
-      nextSteps: "Your appeal will be reviewed by a higher AI court within 48 hours",
+      reviewDate: appealReviewDate.toISOString(),
+      hoursUntilReview: 48,
+      nextSteps: "Your appeal will be reviewed by a higher AI court in 48 hours",
       paymentReceived: req.paymentData.amount
     });
     
   } catch (error) {
     console.error('Appeal error:', error);
     res.status(500).json({ error: "Failed to file appeal" });
+  }
+});
+
+/**
+ * Process a pending appeal
+ */
+router.post('/:caseId/process-appeal', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const caseData = await loadCaseData(caseId);
+    
+    if (!caseData || !caseData.appeal) {
+      return res.status(404).json({ error: "No appeal found for this case" });
+    }
+    
+    if (caseData.status !== 'under_appeal') {
+      return res.status(400).json({ 
+        error: "Case is not under appeal",
+        currentStatus: caseData.status 
+      });
+    }
+    
+    const appeal = caseData.appeal;
+    const now = new Date();
+    const reviewDate = new Date(appeal.reviewDate);
+    
+    // Check if appeal is ready for review
+    if (now < reviewDate) {
+      const hoursLeft = Math.ceil((reviewDate - now) / (1000 * 60 * 60));
+      return res.status(400).json({ 
+        error: "Appeal not ready for review",
+        hoursRemaining: hoursLeft,
+        reviewDate: appeal.reviewDate
+      });
+    }
+    
+    // Enhanced appeal review prompt
+    const prompt = `As a Higher AI Court of Appeals, review this case appeal:
+
+ORIGINAL CASE:
+- Type: ${caseData.claimType}
+- Original Evidence: "${caseData.evidence}"
+- Original Verdict: ${caseData.previousJudgment.verdict}
+- Original Damages: ${caseData.previousJudgment.awardedDamages} ETH
+- Original Reasoning: ${caseData.previousJudgment.reasoning}
+- Evidence Quality: ${caseData.previousJudgment.evidenceQuality}
+
+APPEAL:
+- Appellant: ${appeal.appellant === caseData.plaintiff ? 'Plaintiff' : 'Defendant'}
+- Appeal Reason: "${appeal.reason}"
+- Filed: ${appeal.filedAt}
+
+REVIEW CRITERIA:
+1. Were there errors in law or procedure in the original judgment?
+2. Is there new evidence or perspective that wasn't considered?
+3. Was the evidence evaluation fair and thorough?
+4. Were damages calculated appropriately?
+5. Does the appeal raise valid legal grounds?
+
+APPEAL STANDARDS:
+- Clear error in judgment: Overturn or modify
+- Procedural issues: May warrant new judgment
+- Disagreement with outcome alone: Insufficient for appeal
+- New substantive evidence: May justify reconsideration
+
+Provide appeal decision as JSON:
+{
+  "decision": "upheld" / "overturned" / "modified",
+  "newVerdict": "guilty" / "not_guilty" (if changed),
+  "newAwardedDamages": number (if modified),
+  "reasoning": "detailed explanation of appeal decision",
+  "keyFindings": ["finding1", "finding2"],
+  "costsAwarded": "appellant" / "respondent" / "none"
+}`;
+
+    console.log('⚖️ Processing appeal with higher court AI...');
+    
+    let appealDecision;
+    try {
+      const aiResponse = await invokeModel(prompt, 400);
+      appealDecision = JSON.parse(aiResponse);
+    } catch (error) {
+      console.error('Appeal AI error, using conservative fallback');
+      
+      // Conservative fallback - analyze appeal reason length and quality
+      const appealReasonWords = appeal.reason.split(/\s+/).length;
+      const hasSpecificClaims = /error|mistake|overlooked|failed to consider|new evidence/i.test(appeal.reason);
+      
+      if (appealReasonWords > 50 && hasSpecificClaims) {
+        appealDecision = {
+          decision: "modified",
+          newVerdict: caseData.previousJudgment.verdict,
+          newAwardedDamages: caseData.previousJudgment.awardedDamages * 0.8,
+          reasoning: "The appeal raises some valid concerns. Damages are reduced by 20% in light of the arguments presented.",
+          keyFindings: ["Some merit found in appeal arguments", "Original judgment largely upheld with modification"],
+          costsAwarded: "none"
+        };
+      } else {
+        appealDecision = {
+          decision: "upheld",
+          reasoning: "The appeal does not present sufficient grounds to overturn the original judgment. The original verdict stands.",
+          keyFindings: ["No substantial errors in original judgment", "Appeal arguments lack merit"],
+          costsAwarded: "respondent"
+        };
+      }
+    }
+    
+    // Update case based on appeal decision
+    const updates = {
+      status: appealDecision.decision === 'upheld' ? 'appeal_denied' : 'appeal_granted',
+      appealDecision: appealDecision,
+      appealProcessedAt: new Date().toISOString()
+    };
+    
+    // If verdict is changed or modified
+    if (appealDecision.decision !== 'upheld') {
+      updates.judgment = {
+        ...caseData.previousJudgment,
+        verdict: appealDecision.newVerdict || caseData.previousJudgment.verdict,
+        awardedDamages: appealDecision.newAwardedDamages !== undefined 
+          ? appealDecision.newAwardedDamages 
+          : caseData.previousJudgment.awardedDamages,
+        appealModified: true,
+        appealDecisionDate: new Date().toISOString()
+      };
+      
+      // Update status based on new verdict
+      if (appealDecision.newVerdict === 'not_guilty') {
+        updates.status = 'appeal_granted_dismissed';
+      } else if (appealDecision.newAwardedDamages > 0) {
+        updates.status = 'appeal_granted_modified';
+      }
+    }
+    
+    await updateCaseData(caseId, updates);
+    
+    res.json({
+      success: true,
+      appealDecision,
+      message: appealDecision.decision === 'upheld' 
+        ? "Appeal denied - original judgment stands"
+        : appealDecision.decision === 'overturned'
+        ? "Appeal granted - judgment overturned"
+        : "Appeal granted - judgment modified",
+      newStatus: updates.status
+    });
+    
+  } catch (error) {
+    console.error('Appeal processing error:', error);
+    res.status(500).json({ error: "Failed to process appeal" });
+  }
+});
+
+/**
+ * Check appeal status
+ */
+router.get('/:caseId/appeal-status', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    const caseData = await loadCaseData(caseId);
+    
+    if (!caseData) {
+      return res.status(404).json({ error: `Case ${caseId} not found` });
+    }
+    
+    if (!caseData.appeal) {
+      return res.status(404).json({ error: "No appeal filed for this case" });
+    }
+    
+    const now = new Date();
+    const reviewDate = new Date(caseData.appeal.reviewDate);
+    const hoursRemaining = Math.max(0, Math.ceil((reviewDate - now) / (1000 * 60 * 60)));
+    
+    res.json({
+      success: true,
+      appeal: {
+        ...caseData.appeal,
+        hoursRemaining,
+        readyForReview: now >= reviewDate
+      },
+      appealDecision: caseData.appealDecision || null,
+      currentStatus: caseData.status
+    });
+    
+  } catch (error) {
+    console.error('Appeal status error:', error);
+    res.status(500).json({ error: "Failed to check appeal status" });
   }
 });
 

@@ -28,46 +28,52 @@ export const paymentMiddleware = (req, res, next) => {
   next();
 };
 
-// Verify payment middleware
-export const verifyPayment = (req, res, next) => {
-  const paymentHeader = req.headers['x-payment'];
-  
-  if (!paymentHeader) {
-    const price = getPriceForPath(req.path) || "$1.00";
+// Verify payment middleware factory - UPDATED to accept price parameter
+export const verifyPayment = (priceInDollars) => {
+  return (req, res, next) => {
+    const paymentHeader = req.headers['x-payment'];
     
-    return res.status(402).json({
-      error: "Payment required",
-      message: "This endpoint requires payment via x402 protocol",
-      paymentRequired: {
-        amount: price,
-        address: TREASURY_ADDRESS,
-        details: "Include X-PAYMENT header with payment proof"
-      }
-    });
-  }
-  
-  // Decode and verify payment (simplified for demo)
-  try {
-    const paymentData = JSON.parse(
-      Buffer.from(paymentHeader, 'base64').toString()
-    );
+    if (!paymentHeader) {
+      const price = priceInDollars ? `$${priceInDollars.toFixed(2)}` : getPriceForPath(req.path) || "$1.00";
+      
+      return res.status(402).json({
+        error: "Payment required",
+        message: "This endpoint requires payment via x402 protocol",
+        paymentRequired: {
+          amount: price,
+          address: TREASURY_ADDRESS,
+          details: "Include X-PAYMENT header with payment proof"
+        }
+      });
+    }
     
-    req.paymentData = {
-      from: paymentData.from || "0xuser",
-      amount: paymentData.amount || "$0.00",
-      timestamp: new Date().toISOString(),
-      endpoint: req.originalUrl,
-      verified: true
-    };
-    
-    console.log(`💰 Payment received for ${req.path}:`, req.paymentData);
-    next();
-  } catch (error) {
-    return res.status(400).json({
-      error: "Invalid payment header",
-      message: "Payment header must be base64 encoded JSON"
-    });
-  }
+    // Decode and verify payment (simplified for demo)
+    try {
+      const paymentData = JSON.parse(
+        Buffer.from(paymentHeader, 'base64').toString()
+      );
+      
+      // Verify the payment amount matches the required price
+      const requiredPrice = priceInDollars ? `$${priceInDollars.toFixed(2)}` : getPriceForPath(req.path);
+      
+      req.paymentData = {
+        from: paymentData.from || "0xuser",
+        amount: paymentData.amount || "$0.00",
+        timestamp: new Date().toISOString(),
+        endpoint: req.originalUrl,
+        verified: true,
+        requiredAmount: requiredPrice
+      };
+      
+      console.log(`💰 Payment received for ${req.path}:`, req.paymentData);
+      next();
+    } catch (error) {
+      return res.status(400).json({
+        error: "Invalid payment header",
+        message: "Payment header must be base64 encoded JSON"
+      });
+    }
+  };
 };
 
 // Helper function to get price for a path
