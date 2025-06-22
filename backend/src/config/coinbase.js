@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 
-// Load environment variables
+// Load environment variables for production
 config();
 
 // Get current directory
