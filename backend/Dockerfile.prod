@@ -10,7 +10,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci 
 
-
 # Copy ALL source code and artifacts
 COPY . .
 
@@ -32,6 +31,17 @@ WORKDIR /app
 # Copy everything from builder
 COPY --from=builder --chown=nodejs:nodejs /app ./
 
+# Create coinbase_cloud_api_key.json from environment variables (BEFORE switching to non-root user)
+RUN if [ -n "$COINBASE_PRIVATE_KEY" ] && [ -n "$COINBASE_PROJECT_ID" ]; then \
+      echo "🔧 Creating coinbase_cloud_api_key.json from environment variables..."; \
+      echo "{ \"name\": \"${COINBASE_NAME:-ai-lawsuit-bot}\", \"privateKey\": \"$COINBASE_PRIVATE_KEY\", \"id\": \"$COINBASE_PROJECT_ID\" }" > coinbase_cloud_api_key.json; \
+      echo "✅ Created coinbase_cloud_api_key.json"; \
+      ls -la coinbase_cloud_api_key.json; \
+      chown nodejs:nodejs coinbase_cloud_api_key.json; \
+    else \
+      echo "❌ Missing COINBASE_PRIVATE_KEY or COINBASE_PROJECT_ID environment variables"; \
+      echo "⚠️  App will run without wallet functionality"; \
+    fi
 
 # Create necessary directories
 RUN mkdir -p /app/cases /app/data /app/cache /app/wallets /app/data/settlements && \

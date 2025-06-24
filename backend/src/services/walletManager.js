@@ -2,6 +2,7 @@ import { Wallet } from "@coinbase/coinbase-sdk";
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,42 @@ export class WalletManager {
     this.wallets = new Map();
     this.walletsDir = path.join(process.cwd(), 'wallets');
     this.initialized = false;
+    this.deploymentInfo = this.loadDeploymentInfo();
+  }
+
+  loadDeploymentInfo() {
+    try {
+      const deploymentPath = path.join(process.cwd(), 'deployment-info.json');
+      const data = readFileSync(deploymentPath, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.warn('⚠️  Could not load deployment-info.json, using environment variables');
+      return {
+        walletSeeds: {
+          courtTreasury: process.env.TREASURY_SEED || "5c4fb5f8-f578-42c4-9173-9ede02bad5ad",
+          juryPool: process.env.JURY_POOL_SEED || "3eb9f183-f0a4-4c7e-a192-a60bd1894b2e",
+          precedentFund: process.env.PRECEDENT_FUND_SEED || "f11bbce1-ca2b-4fe5-a612-376fc8b9e9e0",
+          aiJudge: process.env.AI_JUDGE_SEED || "f0f9ce7a-7d63-4d74-be97-f1c78a8a7172"
+        }
+      };
+    }
+  }
+
+  // Map wallet names to deployment-info seed names
+  getSeedForWallet(walletName) {
+    const seedMapping = {
+      'treasury': 'courtTreasury',
+      'escrow': 'courtTreasury', // Use same as treasury for now
+      'juryPool': 'juryPool', 
+      'precedentFund': 'precedentFund'
+    };
+    
+    const seedKey = seedMapping[walletName];
+    if (!seedKey) return null;
+    
+    const seed = this.deploymentInfo?.walletSeeds?.[seedKey];
+    console.log(`🔑 Using seed for ${walletName}: ${seed ? '✅ Found' : '❌ Missing'}`);
+    return seed;
   }
 
   async initialize() {
@@ -20,6 +57,7 @@ export class WalletManager {
       
       // Load or create system wallets
       console.log('🏦 Initializing wallet system...');
+      console.log('📋 Available seeds:', Object.keys(this.deploymentInfo?.walletSeeds || {}));
       
       this.wallets.set('treasury', await this.loadOrCreateWallet('treasury'));
       this.wallets.set('escrow', await this.loadOrCreateWallet('escrow'));
@@ -54,17 +92,64 @@ export class WalletManager {
       const wallet = await Wallet.fetch(walletId);
       await wallet.loadSeedFromFile(seedPath);
       
+      console.log(`✅ Loaded existing ${walletName} wallet`);
       return wallet;
     } catch (error) {
       // Create new wallet if doesn't exist
       console.log(`🆕 Creating new ${walletName} wallet...`);
-      const wallet = await Wallet.create({ networkId: "base-sepolia" });
+      
+      const seed = this.getSeedForWallet(walletName);
+      let wallet;
+      
+      if (seed) {
+        try {
+          console.log(`🌱 Using predefined seed for ${walletName}`);
+          
+          // Try different seed formats that Coinbase SDK might expect
+          const seedFormats = [
+            seed,                                    // Original UUID format
+            seed.replace(/-/g, ''),                 // Remove dashes
+            `0x${seed.replace(/-/g, '')}`,          // Hex prefix
+            Buffer.from(seed.replace(/-/g, ''), 'hex').toString('base64'), // Base64
+            seed.padEnd(64, '0'),                   // Pad to 64 chars
+          ];
+          
+          for (const seedFormat of seedFormats) {
+            try {
+              console.log(`🔄 Trying seed format for ${walletName}...`);
+              wallet = await Wallet.createWithSeed({
+                networkId: "base-sepolia",
+                seed: seedFormat
+              });
+              console.log(`✅ Success with seed format for ${walletName}`);
+              break;
+            } catch (seedError) {
+              console.log(`❌ Seed format failed for ${walletName}:`, seedError.message);
+              continue;
+            }
+          }
+          
+          if (!wallet) {
+            throw new Error('All seed formats failed');
+          }
+          
+        } catch (seedError) {
+          console.warn(`⚠️  Seed creation failed for ${walletName}, falling back to random wallet`);
+          console.error('Seed error details:', seedError);
+          wallet = await Wallet.create({ networkId: "base-sepolia" });
+        }
+      } else {
+        console.log(`🎲 No seed found for ${walletName}, creating random wallet`);
+        wallet = await Wallet.create({ networkId: "base-sepolia" });
+      }
       
       // Save wallet metadata
       const walletData = {
         walletId: wallet.getId(),
         name: walletName,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        usedSeed: !!seed,
+        seedSource: seed ? 'deployment-info' : 'random'
       };
       
       await fs.writeFile(walletPath, JSON.stringify(walletData, null, 2));
@@ -72,12 +157,15 @@ export class WalletManager {
       // Save wallet seed separately
       await wallet.saveSeedToFile(seedPath, true); // Encrypted
       
+      console.log(`✅ Created ${walletName} wallet: ${wallet.getId()}`);
       return wallet;
     }
   }
 
   async createCaseWallet(caseId) {
     const walletName = `case_${caseId}`;
+    
+    // Case wallets don't need seeds - they're one-time use
     const wallet = await Wallet.create({ networkId: "base-sepolia" });
     
     this.wallets.set(walletName, wallet);
@@ -91,7 +179,8 @@ export class WalletManager {
       walletId: wallet.getId(),
       caseId,
       address: await wallet.getDefaultAddress(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      type: 'case-wallet'
     };
     
     await fs.writeFile(caseWalletPath, JSON.stringify(walletData, null, 2));
@@ -230,7 +319,11 @@ export class WalletManager {
   async exportWalletInfo() {
     const info = {
       system: {},
-      cases: []
+      cases: [],
+      deploymentInfo: {
+        seedsAvailable: !!this.deploymentInfo?.walletSeeds,
+        seedKeys: Object.keys(this.deploymentInfo?.walletSeeds || {})
+      }
     };
     
     for (const [name, wallet] of this.wallets) {
