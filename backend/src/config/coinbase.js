@@ -16,21 +16,21 @@ let coinbase;
 // Initialize Coinbase SDK
 try {
   // Check if we're in production or have environment variables set
-  if (process.env.privateKey && process.env.id) {
+  if (process.env.COINBASE_PRIVATE_KEY && process.env.COINBASE_PROJECT_ID) {
     console.log('🔧 Configuring Coinbase SDK from environment variables...');
-    
+
     coinbase = Coinbase.configure({
       apiKeyName: process.env.COINBASE_NAME || 'ai-lawsuit-bot',
       privateKey: process.env.COINBASE_PRIVATE_KEY,
       projectId: process.env.COINBASE_PROJECT_ID
     });
-    
+
     console.log('✅ Coinbase SDK initialized successfully from environment variables');
   } 
   // Fallback to JSON file for local development
   else if (process.env.COINBASE_API_KEY_PATH) {
     const apiKeyPath = join(__dirname, '../../', process.env.COINBASE_API_KEY_PATH);
-    
+
     if (existsSync(apiKeyPath)) {
       console.log('🔧 Configuring Coinbase SDK from JSON file...');
       coinbase = Coinbase.configureFromJson(apiKeyPath);
@@ -42,7 +42,7 @@ try {
   // Try default JSON file location
   else {
     const defaultPath = join(__dirname, '../../coinbase_cloud_api_key.json');
-    
+
     if (existsSync(defaultPath)) {
       console.log('🔧 Configuring Coinbase SDK from default JSON file...');
       coinbase = Coinbase.configureFromJson(defaultPath);
@@ -53,7 +53,7 @@ try {
   }
 } catch (error) {
   console.error('❌ Failed to initialize Coinbase SDK:', error.message);
-  
+
   // In production, log the error but don't exit - allow app to start with limited functionality
   if (process.env.NODE_ENV === 'production') {
     console.warn('⚠️  Running in production without Coinbase SDK - some features may be limited');

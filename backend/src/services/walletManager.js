@@ -33,6 +33,13 @@ export class WalletManager {
     }
   }
 
+  // Get deterministic wallet ID based on seed
+  getDeterministicWalletId(seed) {
+    // Use the seed to create a deterministic wallet ID
+    // This ensures the same seed always maps to the same wallet
+    return `wallet-${seed}`;
+  }
+
   // Map wallet names to deployment-info seed names
   getSeedForWallet(walletName) {
     const seedMapping = {
@@ -75,6 +82,13 @@ export class WalletManager {
       return true;
     } catch (error) {
       console.error('❌ Wallet initialization error:', error);
+      
+      // In production, don't crash the entire app
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('⚠️  Continuing without wallet system - wallet features will be limited');
+        this.initialized = false;
+        return false;
+      }
       throw error;
     }
   }
@@ -90,58 +104,61 @@ export class WalletManager {
       const { walletId } = JSON.parse(walletData);
       
       const wallet = await Wallet.fetch(walletId);
-      await wallet.loadSeedFromFile(seedPath);
       
-      console.log(`✅ Loaded existing ${walletName} wallet`);
+      // Try to load seed if it exists
+      try {
+        await wallet.loadSeedFromFile(seedPath);
+        console.log(`✅ Loaded existing ${walletName} wallet with seed`);
+      } catch (seedError) {
+        console.log(`✅ Loaded existing ${walletName} wallet (view-only)`);
+      }
+      
       return wallet;
     } catch (error) {
       // Create new wallet if doesn't exist
       console.log(`🆕 Creating new ${walletName} wallet...`);
       
       const seed = this.getSeedForWallet(walletName);
-      let wallet;
       
       if (seed) {
+        // For wallets with seeds, we'll use a deterministic approach
+        // Check if we already have a wallet for this seed
+        const deterministicId = this.getDeterministicWalletId(seed);
+        
         try {
-          console.log(`🌱 Using predefined seed for ${walletName}`);
+          console.log(`🌱 Checking for existing wallet with seed ID: ${deterministicId}`);
           
-          // Try different seed formats that Coinbase SDK might expect
-          const seedFormats = [
-            seed,                                    // Original UUID format
-            seed.replace(/-/g, ''),                 // Remove dashes
-            `0x${seed.replace(/-/g, '')}`,          // Hex prefix
-            Buffer.from(seed.replace(/-/g, ''), 'hex').toString('base64'), // Base64
-            seed.padEnd(64, '0'),                   // Pad to 64 chars
-          ];
+          // Try to find existing wallet with this deterministic ID
+          const existingWalletPath = path.join(this.walletsDir, `${deterministicId}.json`);
+          const existingWalletData = await fs.readFile(existingWalletPath, 'utf8');
+          const { walletId } = JSON.parse(existingWalletData);
           
-          for (const seedFormat of seedFormats) {
-            try {
-              console.log(`🔄 Trying seed format for ${walletName}...`);
-              wallet = await Wallet.createWithSeed({
-                networkId: "base-sepolia",
-                seed: seedFormat
-              });
-              console.log(`✅ Success with seed format for ${walletName}`);
-              break;
-            } catch (seedError) {
-              console.log(`❌ Seed format failed for ${walletName}:`, seedError.message);
-              continue;
-            }
-          }
+          const wallet = await Wallet.fetch(walletId);
+          console.log(`✅ Found existing wallet for seed ${seed}`);
           
-          if (!wallet) {
-            throw new Error('All seed formats failed');
-          }
+          // Copy to current wallet name for easy access
+          const walletData = {
+            walletId: wallet.getId(),
+            name: walletName,
+            createdAt: new Date().toISOString(),
+            usedSeed: true,
+            seedSource: 'deployment-info',
+            originalSeed: seed
+          };
           
-        } catch (seedError) {
-          console.warn(`⚠️  Seed creation failed for ${walletName}, falling back to random wallet`);
-          console.error('Seed error details:', seedError);
-          wallet = await Wallet.create({ networkId: "base-sepolia" });
+          await fs.writeFile(walletPath, JSON.stringify(walletData, null, 2));
+          return wallet;
+          
+        } catch (existingError) {
+          console.log(`🔄 No existing wallet found for seed, creating new one`);
         }
-      } else {
-        console.log(`🎲 No seed found for ${walletName}, creating random wallet`);
-        wallet = await Wallet.create({ networkId: "base-sepolia" });
       }
+      
+      // Create a standard wallet (Coinbase SDK doesn't support createWithSeed the way we want)
+      console.log(`🎲 Creating standard wallet for ${walletName}`);
+      const wallet = await Wallet.create({ 
+        networkId: "base-sepolia"
+      });
       
       // Save wallet metadata
       const walletData = {
@@ -149,13 +166,27 @@ export class WalletManager {
         name: walletName,
         createdAt: new Date().toISOString(),
         usedSeed: !!seed,
-        seedSource: seed ? 'deployment-info' : 'random'
+        seedSource: seed ? 'deployment-info' : 'random',
+        originalSeed: seed || null,
+        note: seed ? 'Seed-mapped wallet (deterministic by name)' : 'Random wallet'
       };
       
       await fs.writeFile(walletPath, JSON.stringify(walletData, null, 2));
       
-      // Save wallet seed separately
-      await wallet.saveSeedToFile(seedPath, true); // Encrypted
+      // If we have a seed, also save with the deterministic ID for future reference
+      if (seed) {
+        const deterministicId = this.getDeterministicWalletId(seed);
+        const deterministicPath = path.join(this.walletsDir, `${deterministicId}.json`);
+        await fs.writeFile(deterministicPath, JSON.stringify(walletData, null, 2));
+      }
+      
+      // Save wallet seed separately (this will be the actual cryptographic seed)
+      try {
+        await wallet.saveSeedToFile(seedPath, true); // Encrypted
+        console.log(`🔐 Saved cryptographic seed for ${walletName}`);
+      } catch (seedSaveError) {
+        console.warn(`⚠️  Could not save cryptographic seed for ${walletName}:`, seedSaveError.message);
+      }
       
       console.log(`✅ Created ${walletName} wallet: ${wallet.getId()}`);
       return wallet;
@@ -163,57 +194,99 @@ export class WalletManager {
   }
 
   async createCaseWallet(caseId) {
-    const walletName = `case_${caseId}`;
-    
-    // Case wallets don't need seeds - they're one-time use
-    const wallet = await Wallet.create({ networkId: "base-sepolia" });
-    
-    this.wallets.set(walletName, wallet);
-    
-    // Save case wallet info
-    const caseWalletPath = path.join(this.walletsDir, 'cases', `${walletName}.json`);
-    const caseSeedPath = path.join(this.walletsDir, 'cases', `${walletName}.seed`);
-    await fs.mkdir(path.dirname(caseWalletPath), { recursive: true });
-    
-    const walletData = {
-      walletId: wallet.getId(),
-      caseId,
-      address: await wallet.getDefaultAddress(),
-      createdAt: new Date().toISOString(),
-      type: 'case-wallet'
-    };
-    
-    await fs.writeFile(caseWalletPath, JSON.stringify(walletData, null, 2));
-    await wallet.saveSeedToFile(caseSeedPath, true);
-    
-    return wallet;
+    if (!this.initialized) {
+      console.warn('⚠️  Wallet system not initialized, cannot create case wallet');
+      return null;
+    }
+
+    try {
+      const walletName = `case_${caseId}`;
+      
+      // Case wallets don't need seeds - they're one-time use
+      const wallet = await Wallet.create({ networkId: "base-sepolia" });
+      
+      this.wallets.set(walletName, wallet);
+      
+      // Save case wallet info
+      const caseWalletPath = path.join(this.walletsDir, 'cases', `${walletName}.json`);
+      const caseSeedPath = path.join(this.walletsDir, 'cases', `${walletName}.seed`);
+      await fs.mkdir(path.dirname(caseWalletPath), { recursive: true });
+      
+      const walletData = {
+        walletId: wallet.getId(),
+        caseId,
+        address: await wallet.getDefaultAddress(),
+        createdAt: new Date().toISOString(),
+        type: 'case-wallet'
+      };
+      
+      await fs.writeFile(caseWalletPath, JSON.stringify(walletData, null, 2));
+      
+      try {
+        await wallet.saveSeedToFile(caseSeedPath, true);
+      } catch (seedError) {
+        console.warn(`⚠️  Could not save seed for case wallet ${caseId}`);
+      }
+      
+      return wallet;
+    } catch (error) {
+      console.error(`❌ Failed to create case wallet for ${caseId}:`, error);
+      return null;
+    }
+  }
+
+  // Check if wallet system is ready
+  isReady() {
+    return this.initialized;
   }
 
   async getWalletBalance(walletName) {
+    if (!this.isReady()) {
+      throw new Error('Wallet system not initialized');
+    }
+
     const wallet = this.wallets.get(walletName);
     if (!wallet) throw new Error(`Wallet ${walletName} not found`);
     
-    const balances = await wallet.getBalances();
-    return balances;
+    try {
+      const balances = await wallet.getBalances();
+      return balances;
+    } catch (error) {
+      console.error(`❌ Failed to get balance for ${walletName}:`, error);
+      return {};
+    }
   }
 
   async fundWallet(walletName, amount) {
+    if (!this.isReady()) {
+      throw new Error('Wallet system not initialized');
+    }
+
     const wallet = this.wallets.get(walletName);
     if (!wallet) throw new Error(`Wallet ${walletName} not found`);
     
-    // For testnet, use faucet
-    if (amount === 'faucet') {
-      console.log(`🚰 Requesting faucet funds for ${walletName}...`);
-      const faucetTx = await wallet.faucet();
-      console.log(`✅ Faucet transaction: ${faucetTx.getTransactionHash()}`);
-      return faucetTx;
+    try {
+      // For testnet, use faucet
+      if (amount === 'faucet') {
+        console.log(`🚰 Requesting faucet funds for ${walletName}...`);
+        const faucetTx = await wallet.faucet();
+        console.log(`✅ Faucet transaction: ${faucetTx.getTransactionHash()}`);
+        return faucetTx;
+      }
+      
+      // For production, would implement actual funding logic
+      throw new Error('Manual funding not implemented yet');
+    } catch (error) {
+      console.error(`❌ Failed to fund ${walletName}:`, error);
+      throw error;
     }
-    
-    // For production, would implement actual funding logic
-    throw new Error('Manual funding not implemented yet');
   }
 
   async transferFunds(fromWallet, toAddress, amount, assetId = 'eth') {
+    if (!this.isReady()) {
+      throw new Error('Wallet system not initialized');
+    }
+
     const wallet = this.wallets.get(fromWallet);
     if (!wallet) throw new Error(`Wallet ${fromWallet} not found`);
     
@@ -233,6 +306,10 @@ export class WalletManager {
   }
 
   async distributeSettlement(caseId, verdict) {
+    if (!this.isReady()) {
+      throw new Error('Wallet system not initialized');
+    }
+
     const caseWallet = this.wallets.get(`case_${caseId}`);
     if (!caseWallet) throw new Error(`Case wallet ${caseId} not found`);
     
@@ -305,11 +382,20 @@ export class WalletManager {
   }
 
   async getSystemWalletAddresses() {
+    if (!this.isReady()) {
+      return { error: 'Wallet system not initialized' };
+    }
+
     const addresses = {};
     
     for (const [name, wallet] of this.wallets) {
       if (['treasury', 'escrow', 'juryPool', 'precedentFund'].includes(name)) {
-        addresses[name] = await wallet.getDefaultAddress();
+        try {
+          addresses[name] = await wallet.getDefaultAddress();
+        } catch (error) {
+          console.warn(`⚠️  Could not get address for ${name}`);
+          addresses[name] = 'unavailable';
+        }
       }
     }
     
@@ -320,27 +406,36 @@ export class WalletManager {
     const info = {
       system: {},
       cases: [],
+      initialized: this.initialized,
       deploymentInfo: {
         seedsAvailable: !!this.deploymentInfo?.walletSeeds,
         seedKeys: Object.keys(this.deploymentInfo?.walletSeeds || {})
       }
     };
     
+    if (!this.isReady()) {
+      return info;
+    }
+    
     for (const [name, wallet] of this.wallets) {
-      const address = await wallet.getDefaultAddress();
-      const balances = await wallet.getBalances();
-      
-      if (name.startsWith('case_')) {
-        info.cases.push({
-          name,
-          address,
-          balances
-        });
-      } else {
-        info.system[name] = {
-          address,
-          balances
-        };
+      try {
+        const address = await wallet.getDefaultAddress();
+        const balances = await wallet.getBalances();
+        
+        if (name.startsWith('case_')) {
+          info.cases.push({
+            name,
+            address,
+            balances
+          });
+        } else {
+          info.system[name] = {
+            address,
+            balances
+          };
+        }
+      } catch (error) {
+        console.warn(`⚠️  Could not export info for wallet ${name}`);
       }
     }
     
