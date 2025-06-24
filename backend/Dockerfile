@@ -8,7 +8,10 @@ WORKDIR /app
 
 # Copy package files first for better caching
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci 
+
+# Build contracts (generate artifacts)
+RUN npx hardhat compile
 
 # Copy source code
 COPY . .

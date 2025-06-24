@@ -16,7 +16,7 @@ let coinbase;
 // Initialize Coinbase SDK
 try {
   // Check if we're in production or have environment variables set
-  if (process.env.COINBASE_PRIVATE_KEY && process.env.COINBASE_PROJECT_ID) {
+  if (process.env.privateKey && process.env.id) {
     console.log('🔧 Configuring Coinbase SDK from environment variables...');
     
     coinbase = Coinbase.configure({

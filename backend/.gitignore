@@ -1,5 +1,32 @@
-node_modules
+# Node modules
+node_modules/
+
+# Environment files
 .env
+
+# Build artifacts
+
+
+# Sensitive keys
+coinbase_cloud_api_key.json
+wallet-backup.json
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# Hardhat/Truffle stuff
+cache/
+coverage/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Test output
+test/
 
 # Hardhat files
 /cache
@@ -17,5 +44,4 @@ node_modules
 ignition/deployments/chain-31337
 
 # Coinbase API credentials
-coinbase_cloud_api_key.json
-backend/coinbase_cloud_api_key.json
+
