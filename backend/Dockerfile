@@ -41,17 +41,17 @@ COPY package*.json ./
 RUN npm ci --only=production && \
     npm cache clean --force
 
-# Copy application code from builder
+# Copy application code from builder - without shell redirections
 COPY --from=builder /app/src ./src
-COPY --from=builder /app/contracts ./contracts 2>/dev/null || true
-COPY --from=builder /app/artifacts ./artifacts 2>/dev/null || true
-COPY --from=builder /app/cache ./cache 2>/dev/null || true
-COPY --from=builder /app/scripts ./scripts 2>/dev/null || true
-COPY --from=builder /app/*.js* ./ 2>/dev/null || true
-COPY --from=builder /app/*.json ./ 2>/dev/null || true
+COPY --from=builder /app/contracts ./contracts
+COPY --from=builder /app/artifacts ./artifacts
 
 # Copy the entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+
+# Copy other files that might exist
+COPY --from=builder /app/*.js* ./
+COPY --from=builder /app/deployment-info.json ./deployment-info.json
 
 # Create necessary directories with correct permissions
 RUN mkdir -p \
@@ -59,6 +59,7 @@ RUN mkdir -p \
     /app/data/settlements \
     /app/wallets/cases \
     /app/cache \
+    /app/scripts \
     /app/logs \
     /app/temp && \
     chmod +x /app/docker-entrypoint.sh && \
