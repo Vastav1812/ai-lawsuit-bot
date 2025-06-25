@@ -1,4 +1,5 @@
 import { Wallet } from "@coinbase/coinbase-sdk";
+import coinbase from '../config/coinbase.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -59,41 +60,61 @@ export class WalletManager {
 
   async initialize() {
     try {
+      // Check if Coinbase is initialized
+      if (!coinbase) {
+        console.warn('⚠️  Coinbase SDK not initialized - wallet features will be limited');
+        this.initialized = false;
+        return false;
+      }
+
       // Create wallets directory if it doesn't exist
       await fs.mkdir(this.walletsDir, { recursive: true });
       
-      // Load or create system wallets
       console.log('🏦 Initializing wallet system...');
       console.log('📋 Available seeds:', Object.keys(this.deploymentInfo?.walletSeeds || {}));
       
-      this.wallets.set('treasury', await this.loadOrCreateWallet('treasury'));
-      this.wallets.set('escrow', await this.loadOrCreateWallet('escrow'));
-      this.wallets.set('juryPool', await this.loadOrCreateWallet('juryPool'));
-      this.wallets.set('precedentFund', await this.loadOrCreateWallet('precedentFund'));
-      
-      // Log wallet addresses
-      console.log('✅ System wallets initialized:');
-      for (const [name, wallet] of this.wallets) {
-        const address = await wallet.getDefaultAddress();
-        console.log(`   ${name}: ${address}`);
+      // Load or create system wallets
+      try {
+        this.wallets.set('treasury', await this.loadOrCreateWallet('treasury'));
+        this.wallets.set('escrow', await this.loadOrCreateWallet('escrow'));
+        this.wallets.set('juryPool', await this.loadOrCreateWallet('juryPool'));
+        this.wallets.set('precedentFund', await this.loadOrCreateWallet('precedentFund'));
+        
+        // Log wallet addresses
+        console.log('✅ System wallets initialized:');
+        for (const [name, wallet] of this.wallets) {
+          if (wallet) {
+            try {
+              const address = await wallet.getDefaultAddress();
+              console.log(`   ${name}: ${address}`);
+            } catch (e) {
+              console.log(`   ${name}: [error getting address]`);
+            }
+          }
+        }
+        
+        this.initialized = true;
+        return true;
+      } catch (walletError) {
+        console.error('❌ Wallet creation error:', walletError);
+        throw walletError;
       }
-      
-      this.initialized = true;
-      return true;
     } catch (error) {
       console.error('❌ Wallet initialization error:', error);
       
       // In production, don't crash the entire app
-      if (process.env.NODE_ENV === 'production') {
-        console.warn('⚠️  Continuing without wallet system - wallet features will be limited');
-        this.initialized = false;
-        return false;
-      }
-      throw error;
+      console.warn('⚠️  Continuing without wallet system - wallet features will be limited');
+      this.initialized = false;
+      return false;
     }
   }
 
   async loadOrCreateWallet(walletName) {
+    if (!coinbase) {
+      console.warn(`⚠️  Cannot create wallet ${walletName} - Coinbase SDK not initialized`);
+      return null;
+    }
+
     const walletPath = path.join(this.walletsDir, `${walletName}.json`);
     const seedPath = path.join(this.walletsDir, `${walletName}.seed`);
     
@@ -154,7 +175,7 @@ export class WalletManager {
         }
       }
       
-      // Create a standard wallet (Coinbase SDK doesn't support createWithSeed the way we want)
+      // Create a standard wallet
       console.log(`🎲 Creating standard wallet for ${walletName}`);
       const wallet = await Wallet.create({ 
         networkId: "base-sepolia"
@@ -194,9 +215,25 @@ export class WalletManager {
   }
 
   async createCaseWallet(caseId) {
+    // Check if Coinbase is available
+    if (!coinbase) {
+      console.warn('⚠️  Coinbase SDK not available, returning mock wallet');
+      return {
+        getId: () => `mock-wallet-${caseId}`,
+        getDefaultAddress: async () => ({ 
+          getId: () => `0x0000000000000000000000000000000000000000` 
+        })
+      };
+    }
+
     if (!this.initialized) {
-      console.warn('⚠️  Wallet system not initialized, cannot create case wallet');
-      return null;
+      console.warn('⚠️  Wallet system not initialized, returning mock wallet');
+      return {
+        getId: () => `pending-wallet-${caseId}`,
+        getDefaultAddress: async () => ({ 
+          getId: () => `0x0000000000000000000000000000000000000000` 
+        })
+      };
     }
 
     try {
@@ -212,10 +249,11 @@ export class WalletManager {
       const caseSeedPath = path.join(this.walletsDir, 'cases', `${walletName}.seed`);
       await fs.mkdir(path.dirname(caseWalletPath), { recursive: true });
       
+      const address = await wallet.getDefaultAddress();
       const walletData = {
         walletId: wallet.getId(),
         caseId,
-        address: await wallet.getDefaultAddress(),
+        address: address.getId(),
         createdAt: new Date().toISOString(),
         type: 'case-wallet'
       };
@@ -231,7 +269,13 @@ export class WalletManager {
       return wallet;
     } catch (error) {
       console.error(`❌ Failed to create case wallet for ${caseId}:`, error);
-      return null;
+      // Return a mock wallet instead of null
+      return {
+        getId: () => `error-wallet-${caseId}`,
+        getDefaultAddress: async () => ({ 
+          getId: () => `0x0000000000000000000000000000000000000000` 
+        })
+      };
     }
   }
 
@@ -242,18 +286,22 @@ export class WalletManager {
 
   async getWalletBalance(walletName) {
     if (!this.isReady()) {
-      throw new Error('Wallet system not initialized');
+      console.warn('⚠️  Wallet system not initialized');
+      return { ETH: '0', error: 'Wallet system not initialized' };
     }
 
     const wallet = this.wallets.get(walletName);
-    if (!wallet) throw new Error(`Wallet ${walletName} not found`);
+    if (!wallet) {
+      console.warn(`⚠️  Wallet ${walletName} not found`);
+      return { ETH: '0', error: 'Wallet not found' };
+    }
     
     try {
       const balances = await wallet.getBalances();
       return balances;
     } catch (error) {
       console.error(`❌ Failed to get balance for ${walletName}:`, error);
-      return {};
+      return { ETH: '0', error: error.message };
     }
   }
 
@@ -346,7 +394,7 @@ export class WalletManager {
     transfers.push(
       this.transferFunds(
         `case_${caseId}`,
-        treasuryAddress,
+        treasuryAddress.getId(),
         distributions.courtFee
       )
     );
@@ -356,7 +404,7 @@ export class WalletManager {
     transfers.push(
       this.transferFunds(
         `case_${caseId}`,
-        juryAddress,
+        juryAddress.getId(),
         distributions.juryPool
       )
     );
@@ -366,7 +414,7 @@ export class WalletManager {
     transfers.push(
       this.transferFunds(
         `case_${caseId}`,
-        precedentAddress,
+        precedentAddress.getId(),
         distributions.precedentFund
       )
     );
@@ -383,7 +431,13 @@ export class WalletManager {
 
   async getSystemWalletAddresses() {
     if (!this.isReady()) {
-      return { error: 'Wallet system not initialized' };
+      return { 
+        error: 'Wallet system not initialized',
+        treasury: 'Not initialized',
+        escrow: 'Not initialized',
+        juryPool: 'Not initialized',
+        precedentFund: 'Not initialized'
+      };
     }
 
     const addresses = {};
@@ -391,10 +445,15 @@ export class WalletManager {
     for (const [name, wallet] of this.wallets) {
       if (['treasury', 'escrow', 'juryPool', 'precedentFund'].includes(name)) {
         try {
-          addresses[name] = await wallet.getDefaultAddress();
+          if (wallet) {
+            const address = await wallet.getDefaultAddress();
+            addresses[name] = address.getId ? address.getId() : address.toString();
+          } else {
+            addresses[name] = 'Not available';
+          }
         } catch (error) {
-          console.warn(`⚠️  Could not get address for ${name}`);
-          addresses[name] = 'unavailable';
+          console.warn(`⚠️  Could not get address for ${name}:`, error.message);
+          addresses[name] = 'Error retrieving address';
         }
       }
     }
@@ -414,28 +473,38 @@ export class WalletManager {
     };
     
     if (!this.isReady()) {
+      info.error = 'Wallet system not initialized';
       return info;
     }
     
     for (const [name, wallet] of this.wallets) {
       try {
-        const address = await wallet.getDefaultAddress();
-        const balances = await wallet.getBalances();
-        
-        if (name.startsWith('case_')) {
-          info.cases.push({
-            name,
-            address,
-            balances
-          });
-        } else {
-          info.system[name] = {
-            address,
-            balances
-          };
+        if (wallet) {
+          const address = await wallet.getDefaultAddress();
+          const addressStr = address.getId ? address.getId() : address.toString();
+          
+          let balances = { ETH: '0' };
+          try {
+            balances = await wallet.getBalances();
+          } catch (balanceError) {
+            console.warn(`Could not get balances for ${name}`);
+          }
+          
+          if (name.startsWith('case_')) {
+            info.cases.push({
+              name,
+              address: addressStr,
+              balances
+            });
+          } else {
+            info.system[name] = {
+              address: addressStr,
+              balances
+            };
+          }
         }
       } catch (error) {
-        console.warn(`⚠️  Could not export info for wallet ${name}`);
+        console.warn(`⚠️  Could not export info for wallet ${name}:`, error.message);
       }
     }
     

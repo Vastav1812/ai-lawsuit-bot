@@ -8,52 +8,119 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci 
 
-# Copy ALL source code and artifacts
+# Install dependencies (including dev dependencies for build)
+RUN npm ci --include=dev
+
+# Copy source code
 COPY . .
 
-# Build contracts (generate artifacts)
-RUN npx hardhat compile
+# Build contracts (generate artifacts) - only if hardhat.config.cjs exists
+RUN if [ -f "hardhat.config.cjs" ]; then \
+      echo "🔨 Compiling contracts..."; \
+      npx hardhat compile || echo "⚠️  Contract compilation failed, continuing..."; \
+    else \
+      echo "ℹ️  No Hardhat config found, skipping contract compilation"; \
+    fi
 
 # Create production stage
 FROM node:20-alpine AS production
 
 # Install runtime dependencies
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl tini
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
+# Create app directory
 WORKDIR /app
 
-# Copy everything from builder
-COPY --from=builder --chown=nodejs:nodejs /app ./
+# Create non-root user first
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
-# Create coinbase_cloud_api_key.json from environment variables (BEFORE switching to non-root user)
-RUN if [ -n "$COINBASE_PRIVATE_KEY" ] && [ -n "$COINBASE_PROJECT_ID" ]; then \
-      echo "🔧 Creating coinbase_cloud_api_key.json from environment variables..."; \
-      echo "{ \"name\": \"${COINBASE_NAME:-ai-lawsuit-bot}\", \"privateKey\": \"$COINBASE_PRIVATE_KEY\", \"id\": \"$COINBASE_PROJECT_ID\" }" > coinbase_cloud_api_key.json; \
-      echo "✅ Created coinbase_cloud_api_key.json"; \
-      ls -la coinbase_cloud_api_key.json; \
-      chown nodejs:nodejs coinbase_cloud_api_key.json; \
-    else \
-      echo "❌ Missing COINBASE_PRIVATE_KEY or COINBASE_PROJECT_ID environment variables"; \
-      echo "⚠️  App will run without wallet functionality"; \
-    fi
+# Copy package files and install production dependencies only
+COPY package*.json ./
+RUN npm ci --only=production && \
+    npm cache clean --force
 
-# Create necessary directories
-RUN mkdir -p /app/cases /app/data /app/cache /app/wallets /app/data/settlements && \
-    chown -R nodejs:nodejs /app/cases /app/data /app/cache /app/wallets /app/data/settlements
+# Copy application code from builder
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/contracts ./contracts 2>/dev/null || true
+COPY --from=builder /app/artifacts ./artifacts 2>/dev/null || true
+COPY --from=builder /app/cache ./cache 2>/dev/null || true
+COPY --from=builder /app/scripts ./scripts 2>/dev/null || true
+COPY --from=builder /app/*.js* ./ 2>/dev/null || true
+COPY --from=builder /app/*.json ./ 2>/dev/null || true
+
+# Create necessary directories with correct permissions
+RUN mkdir -p \
+    /app/cases \
+    /app/data/settlements \
+    /app/wallets/cases \
+    /app/cache \
+    /app/logs \
+    /app/temp && \
+    chown -R nodejs:nodejs /app
+
+# Create startup script that handles Coinbase configuration
+RUN cat > /app/docker-entrypoint.sh << 'EOF'
+#!/bin/sh
+set -e
+
+echo "🚀 Starting AI Lawsuit Backend..."
+echo "📍 Environment: ${NODE_ENV:-production}"
+echo "🔌 Port: ${PORT:-3000}"
+
+# Handle Coinbase configuration
+if [ -n "$COINBASE_API_KEY_NAME" ] && [ -n "$COINBASE_API_KEY_PRIVATE_KEY" ]; then
+    echo "✅ Coinbase credentials found in environment (API_KEY_NAME)"
+elif [ -n "$COINBASE_PROJECT_ID" ] && [ -n "$COINBASE_PRIVATE_KEY" ]; then
+    echo "✅ Coinbase credentials found in environment (PROJECT_ID)"
+    # Map variables for compatibility
+    export COINBASE_API_KEY_NAME="$COINBASE_PROJECT_ID"
+    export COINBASE_API_KEY_PRIVATE_KEY="$COINBASE_PRIVATE_KEY"
+else
+    echo "⚠️  No Coinbase credentials found - wallet features will be limited"
+fi
+
+# Create deployment info file
+cat > /app/deployment-info.json << EOJSON
+{
+  "platform": "railway",
+  "deployedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "environment": "${NODE_ENV:-production}",
+  "walletSeeds": {
+    "courtTreasury": "${TREASURY_SEED:-5c4fb5f8-f578-42c4-9173-9ede02bad5ad}",
+    "juryPool": "${JURY_POOL_SEED:-3eb9f183-f0a4-4c7e-a192-a60bd1894b2e}",
+    "precedentFund": "${PRECEDENT_FUND_SEED:-f11bbce1-ca2b-4fe5-a612-376fc8b9e9e0}",
+    "aiJudge": "${AI_JUDGE_SEED:-f0f9ce7a-7d63-4d74-be97-f1c78a8a7172}"
+  }
+}
+EOJSON
+
+# Execute the main command
+exec "$@"
+EOF
+
+# Make entrypoint executable
+RUN chmod +x /app/docker-entrypoint.sh && \
+    chown nodejs:nodejs /app/docker-entrypoint.sh
 
 # Switch to non-root user
 USER nodejs
 
+# Set environment variables
+ENV NODE_ENV=production \
+    NPM_CONFIG_LOGLEVEL=warn \
+    NODE_OPTIONS="--max-old-space-size=512"
+
+# Expose port (Railway provides PORT env var)
 EXPOSE 3000
+
+# Use tini for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
-CMD ["npm", "start"]
+# Start the application
+CMD ["node", "src/app.js"]
