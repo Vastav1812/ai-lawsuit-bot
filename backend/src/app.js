@@ -39,7 +39,8 @@ const corsOptions = {
       'http://127.0.0.1:4000',
       'http://localhost:5173',  // Vite default
       'http://127.0.0.1:5173',
-      'https://ai-lawsuit.vercel.app'
+      'https://ai-lawsuit.vercel.app',
+      'https://ai-lawsuit-bot.vercel.app'
     ];
     
     // Check if the origin is allowed
