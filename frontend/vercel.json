@@ -1,15 +1,12 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": ".next",
+  "outputDirectory": ".next", 
   "framework": "nextjs",
   "installCommand": "npm ci",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@api-url"
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }
   ]
-} 
+}
