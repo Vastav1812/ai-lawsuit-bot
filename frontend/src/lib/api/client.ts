@@ -1,6 +1,6 @@
 // src/lib/api/client.ts
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
-import { API_URL } from '@/lib/constants';
+import { getApiUrl } from '@/lib/constants';
 import { generatePaymentHeader } from '@/lib/utils/payment';
 import toast from 'react-hot-toast';
 import { PaymentRequirement } from '@/lib/types/index';
@@ -20,8 +20,11 @@ class APIClient {
   private client: AxiosInstance;
 
   constructor() {
+    const baseURL = getApiUrl();
+    console.log('🔧 API Client initialized with URL:', baseURL);
+    
     this.client = axios.create({
-      baseURL: API_URL,
+      baseURL,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -31,9 +34,16 @@ class APIClient {
     // Request interceptor for logging
     this.client.interceptors.request.use(
       (config) => {
+        // Ensure no double slashes in URL
+        if (config.url?.startsWith('/')) {
+          config.url = config.url;
+        } else if (config.url) {
+          config.url = '/' + config.url;
+        }
+        
         console.log('📤 API Request:', {
           method: config.method?.toUpperCase(),
-          url: config.url,
+          url: `${config.baseURL}${config.url}`,
           headers: config.headers,
           data: config.data
         });
@@ -59,7 +69,8 @@ class APIClient {
         console.error('❌ Response Error:', {
           status: error.response?.status,
           data: error.response?.data,
-          url: error.config?.url
+          url: error.config?.url,
+          message: error.message
         });
         
         if (error.response?.status === 402) {
